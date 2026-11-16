@@ -1,0 +1,225 @@
+/* Home view — timeline + dropdown + search (SPEC §5.1, §5.2, §4.2) */
+:root {
+  --tl-grid: #454547;
+  --tl-grid-year: #6a6a6c;
+  --tl-past: #52525b;
+  --tl-live: #dc2626;
+  --tl-playing: #16a34a; /* a round being played right now */
+  --tl-upcoming: #3b82f6;
+  --tl-today: #dc2626;
+  --nav-pill: #4a315a;
+}
+
+/* Active nav as a pill (§4.2) */
+.site-header nav a.active {
+  background: var(--nav-pill);
+  color: var(--text-bright);
+  border-radius: var(--radius);
+  padding: 2px 8px;
+}
+
+/* Panel header */
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.panel-head .collapse {
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  line-height: 1;
+}
+.panel-head h2 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--text-bright);
+}
+.panel-head .filter {
+  margin-left: 4px;
+}
+.panel-head .legend {
+  margin-left: auto;
+  display: flex;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--text);
+  flex-wrap: wrap;
+}
+.legend .swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  margin-right: 5px;
+  vertical-align: -1px;
+}
+.swatch.past {
+  background: var(--tl-past);
+}
+.swatch.playing {
+  background: var(--tl-playing);
+}
+.swatch.live {
+  background: var(--tl-live);
+}
+.swatch.upcoming {
+  background: var(--tl-upcoming);
+}
+.swatch.expected {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--tl-upcoming),
+    var(--tl-upcoming) 3px,
+    transparent 3px,
+    transparent 6px
+  );
+  border: 1px solid var(--tl-upcoming);
+}
+
+/* Form controls */
+select,
+input[type='text'] {
+  background: var(--page);
+  color: var(--text-bright);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 13px;
+}
+
+/* Timeline chart */
+.timeline {
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--page);
+}
+.timeline-inner {
+  position: relative;
+}
+.tl-gridline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--tl-grid);
+}
+.tl-gridline.year {
+  background: var(--tl-grid-year);
+}
+.tl-today {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--tl-today);
+  opacity: 0.8;
+}
+.tl-month {
+  position: absolute;
+  top: 4px;
+  font-size: 11px;
+  color: var(--text);
+  white-space: nowrap;
+  padding-left: 4px;
+}
+
+/* A timeline entry = label + bar, absolutely placed */
+.tl-item {
+  position: absolute;
+  height: 14px;
+  cursor: pointer;
+}
+.tl-bar {
+  position: absolute;
+  top: 0;
+  height: 14px;
+  border-radius: 2px;
+}
+.tl-bar.past {
+  background: var(--tl-past);
+}
+.tl-bar.playing {
+  background: var(--tl-playing);
+}
+.tl-bar.live {
+  background: var(--tl-live);
+}
+.tl-bar.upcoming {
+  background: var(--tl-upcoming);
+}
+.tl-bar.ext {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--tl-upcoming),
+    var(--tl-upcoming) 3px,
+    rgba(59, 130, 246, 0.25) 3px,
+    rgba(59, 130, 246, 0.25) 6px
+  );
+}
+.tl-label {
+  position: absolute;
+  bottom: 16px;
+  left: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+.tl-item:hover .tl-label {
+  color: var(--text-bright);
+}
+.tl-label.tier5 {
+  color: var(--text-bright);
+}
+
+/* Dropdown + search row */
+.picker {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+.picker .tour-select {
+  min-width: 280px;
+  max-width: 100%;
+}
+.search-wrap {
+  position: relative;
+}
+.search-results {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  max-width: 420px;
+}
+.search-results:empty {
+  display: none;
+}
+.search-results li {
+  padding: 6px 10px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.search-results li:last-child {
+  border-bottom: none;
+}
+.search-results li:hover {
+  background: var(--panel-head);
+  color: var(--text-bright);
+}

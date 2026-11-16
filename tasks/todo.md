@@ -1,42 +1,77 @@
-# Phase 0 — Setup
+# Phase 1 — Timeline (§5.1) + Tournament dropdown & search (§5.2)
 
-- [x] `npm init -y`, `npm i -D vite`, add `dev` / `build` / `preview` scripts
-- [x] `.gitignore` (`node_modules/`, `dist/`, `public/engine/`)
-- [x] `netlify.toml` (build `npm run build`, publish `dist`)
-- [x] `index.html` at root → loads `src/main.js`
-- [x] `src/styles/theme.css` — dark theme (§4.1) as CSS variables
-- [x] Shell: header (site name + nav Tournaments/About), `<main>`, footer credit
-- [x] Hash router in `src/main.js` for all §2 routes
-- [x] Empty view stubs: `src/views/{home,tournament,game,about}.js`
-- [x] `src/api/lichess.js` — queue, 429 handling, in-memory cache, ndjson reader, endpoints A–E
-- [x] TEMP: home view calls A for this month and `console.log`s the tournaments
-- [x] `npm run dev` shows dark shell + console lists this month's tournaments from A
+- [x] `src/styles/home.css` — §4.2 colour vars, panel header, legend, chart, bars (4 states + stripes + pulsing dot), dropdown, search
+- [x] `src/main.js` — import `home.css`
+- [x] `src/views/home.js` — remove TEMP log; orchestrate panel + data + classify + render
+- [x] Data load: A ×5 months (this−2…this+2) sequential, merge/dedupe by `tour.id`, render progressively
+- [x] Data load: B (`nb=100`) once, annotate tours (live detection, rounds, pulsing dot)
+- [x] `classify(tour, bRec, now)` → past / live / upcoming / expected, barStart/barEnd, ongoingNow
+- [x] `src/ui/timeline.js` — day-axis chart: month labels, grid lines, today line, row packing, bars + labels
+- [x] Timeline: horizontal scroll; initial scrollLeft puts today in the right third
+- [x] Timeline: click bar/label → `#/t/{id}`
+- [x] Panel header: collapse arrow, title, filter `<select>` (best / best,high / all), legend
+- [x] Filter change → re-fetch A with new tiers, redraw; reuse B (bars now gated by tier)
+- [x] Dropdown `<select>` with optgroups Live now / Upcoming / Finished (timeline ∪ B); change → `#/t/{id}`
+- [x] Search box: 3+ chars, 400 ms debounce, endpoint C, clickable results → `#/t/{id}`
+- [x] localStorage (try/catch): remember collapsed state + filter
+- [x] All untrusted text via `textContent` / `createElement`
+- [x] `npm run dev` verified in Chrome: colours, today line, filter, click-through, no console errors
 - [x] `npm run build` passes
+- [x] Report current red / grey / blue tournaments for cross-check
 - [x] Review section added
 
 ## Review
 
-**What changed (new files):**
-- `package.json` — ESM project (`"type": "module"`), Vite dev dep, `dev` / `build` / `preview` scripts.
-- `.gitignore`, `netlify.toml` (build `npm run build`, publish `dist`).
-- `index.html` — root Vite entry, loads `src/main.js`, `#app` mount point.
-- `src/styles/theme.css` — §4.1 dark palette as CSS variables; shell styles (header, nav, main, footer, panel, status banner).
-- `src/main.js` — app shell (header + nav + footer credit) and the hash router for all §2 routes (`#/`, `#/t/{tourId}`, `.../{roundId}`, `.../{gameId}`, `#/about`); active-nav highlight; a status banner wired to the API's `onStatus`.
-- `src/views/home.js`, `tournament.js`, `game.js`, `about.js` — placeholder views. Home also has the **TEMP** endpoint-A console log (marked `// TEMP — remove in Phase 1`).
-- `src/api/lichess.js` — single-request queue, HTTP-429 handling (pause 60 s + one retry, `onStatus` banner), in-memory cache (10 min for A/D), ndjson reader (§3.4), and endpoints **A–E**.
+**What changed**
+- **New `src/ui/timeline.js`** — pure Gantt renderer. Month-aligned day axis (~8px/day),
+  month labels (year on the first label + every January), grid lines (brighter at a new
+  year), today line, greedy row-packing (a bar *and* its label can't overlap, label width
+  measured on a canvas), bars coloured by status with a striped "expected" extension and
+  **green bars for "playing now"** (a round being played right now), tier-5 labels
+  brighter. Horizontal scroll; initial
+  `scrollLeft` puts today in the right third; scroll position preserved across re-renders.
+  Click a bar/label → `#/t/{id}`. All names rendered via `textContent`/`createTextNode`.
+- **New `src/styles/home.css`** — §4.2 colours as CSS vars, panel header, legend, chart,
+  the four bar states + stripes + pulsing-dot keyframes, dropdown, search, active nav pill.
+- **`src/views/home.js`** — rewritten as the orchestrator: panel header (collapse, title,
+  tier filter, legend); loads A for 5 months (this−2…this+2) sequentially and redraws as
+  each month arrives; loads B once to detect live/ongoing and supply rounds; `classify()`
+  implements the §5.1 colour rules; builds the status-grouped dropdown (comprehensive:
+  timeline ∪ all of B) and the debounced (400 ms, 3+ char) search via endpoint C; persists
+  collapse + filter in localStorage (try/catch). Removed the Phase-0 TEMP console log.
+- **`src/main.js`** — imports `home.css`.
 
-**How to test:**
-1. `npm install` then `npm run dev` → open the printed localhost URL.
-2. Page is dark, with header (**Chess Live** · Tournaments · About) and the footer credit "Live games via the free Lichess broadcast service".
-3. Open the browser console: one line `[Phase 0] 23 tournament(s) from calendar 2026-11:` followed by the named tournaments (endpoint A). No errors.
-4. Nav links work: `#/about`, `#/t/xxxx`, `#/t/xxxx/yyyy/zzzz` each render their placeholder; reload keeps the view (shareable URLs).
-5. `npm run build` → completes, writes `dist/` (verified: 10 modules, ✓ built).
+**Fix during verification:** the "add live tours from B that fell outside the A window"
+step ignored the tier filter, so "Top tier only" still showed ~100 bars (tier-3/4 leagues).
+`buildItems` now gates the B-only additions with `tierAllowed()`; the dropdown stays
+comprehensive. "Top tier only" now shows 4 bars; "Top + high" shows the full set.
 
-**Verified this session:** endpoint A returned 23 tournaments for 2026-11 (HTTP 200); shell rendered dark in Chrome; console logged exactly one pass with no errors; `npm run build` passed.
+**How to test**
+1. `npm run dev` → `#/`. Dark "Top tournaments" panel with collapse arrow, tier filter,
+   legend (Past/Live/Upcoming/Expected).
+2. Timeline draws progressively; month labels Jul 2026…Jan 2027, red today line near today
+   in the right third; grey/red/blue bars; pulsing dot on the 5 ongoing-round events;
+   tier-5 names brighter; horizontal scrollbar under the chart.
+3. Filter → "Top tier only" collapses to tier-5 only; reload keeps the choice; collapse
+   arrow persists too.
+4. Click a bar/label → `#/t/{id}` (Phase-2 placeholder). Dropdown choice → same. Type 3+
+   chars in search → endpoint-C results appear; click one → `#/t/{id}`.
+5. `npm run build` passes; no app console errors (6 "message channel closed" lines are
+   Chrome-extension noise, not from the app).
 
-**Notes / decisions:**
-- Scoped `lichess.js` to endpoints **A–E** (what the Phase 0 table names). F/G (PGN stream + one-off round PGN) land in Phase 4.
-- Set `package.json` `"type": "module"` so ES-module imports work under Node tooling; dropped the `npm init` defaults (`main`, `test`).
-- Fixed a first-load double-render: normalise an empty hash with `history.replaceState` (no extra `hashchange`) so the view renders — and endpoint A logs — once.
+**Colour model (per user request, overriding §5.1's pulsing dot):**
+- **Green / "Playing now"** = a round is being played right now (B has an `ongoing` round).
+  Legend gained a green "Playing now" swatch; these sort first under "Live now" in the
+  dropdown. The live set is dynamic — at last check 10 tournaments were playing (2 at
+  tier 4: Asian Nations Chess Cup Men & Women, shown green under Top + high; 8 at tier 3,
+  shown green under All official).
+- **Red / Live** = started but not currently playing (between rounds / in-progress league).
+- **Blue / Upcoming** (striped = "Expected"), **Grey / Past** as before.
 
-**Left for later phases:** timeline/dropdown UI (1), flags + tournament page (2), board + game viewer (3), live stream F/G (4), Stockfish analyze (5), mobile/polish/About content (6), ship (7). The TEMP console log in `home.js` is removed in Phase 1.
+**Known rough edge (pre-existing, for Phase 6 polish):** under "All official" a single
+outlier tour ("Knockout") carries a 2025 date, stretching the axis back to Sep 2025. It is
+filtered out under Top + high. Also, the timeline keeps scroll position on a filter change
+rather than re-centering on today (spec says re-center "on load").
+
+**Left for later:** tournament page content + flags (Phase 2), live stream F (Phase 4).
+No new dependencies; endpoints used this phase: A, B, C.
