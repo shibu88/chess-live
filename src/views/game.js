@@ -16,34 +16,51 @@ import { startLiveRound, liveInfo, sideToMoveOf } from '../live/liveRound.js';
 import { liveCentis } from '../lib/time.js';
 import { Engine } from '../engine/engine.js';
 import { toWhiteScore, formatEval, whiteScoreToEv } from '../lib/eval.js';
+import { skeleton, errorState } from '../ui/states.js';
+
+function gameSkeleton() {
+  const view = document.createElement('div');
+  view.className = 'game-view';
+  const center = document.createElement('div');
+  center.className = 'gv-center';
+  center.append(skeleton('sk-bar'), skeleton('sk-board'), skeleton('sk-bar'));
+  const right = document.createElement('div');
+  right.className = 'gv-right';
+  for (let i = 0; i < 8; i++) right.append(skeleton('sk-line'));
+  view.append(document.createElement('div'), center, right);
+  return view;
+}
 
 export function renderGame(main, { tourId, roundId, gameId }) {
-  const wrap = document.createElement('div');
-  wrap.className = 'game-view';
-  const loading = document.createElement('p');
-  loading.textContent = 'Loading game…';
-  wrap.append(loading);
-  main.append(wrap);
+  const host = document.createElement('div');
+  main.append(host);
 
-  Promise.all([getRound(roundId), getRoundPgn(roundId)])
-    .then(([e, pgnText]) => {
-      const game = (e.games || []).find((g) => g.id === gameId);
-      const parsed = parseRoundGame(pgnText, gameId);
-      renderViewer(wrap, { e, game, parsed, tourId, roundId, gameId });
-    })
-    .catch((err) => {
-      console.error('[game] load failed:', err);
-      wrap.replaceChildren();
-      const msg = document.createElement('p');
-      msg.textContent = 'Could not load this game.';
-      wrap.append(msg);
-    });
+  function load() {
+    host.replaceChildren(gameSkeleton());
+    Promise.all([getRound(roundId), getRoundPgn(roundId)])
+      .then(([e, pgnText]) => {
+        const game = (e.games || []).find((g) => g.id === gameId);
+        const parsed = parseRoundGame(pgnText, gameId);
+        const wrap = document.createElement('div');
+        wrap.className = 'game-view';
+        host.replaceChildren(wrap);
+        renderViewer(wrap, { e, game, parsed, tourId, roundId, gameId });
+      })
+      .catch((err) => {
+        console.error('[game] load failed:', err);
+        host.replaceChildren(errorState('Could not load this game.', load));
+      });
+  }
+  load();
 }
 
 function renderViewer(wrap, { e, game, parsed, tourId, roundId, gameId }) {
   wrap.replaceChildren();
 
   const players = game?.players || [{}, {}];
+  if (players[0]?.name && players[1]?.name) {
+    document.title = `${players[0].name} – ${players[1].name} · Chess Live`;
+  }
   const roundLive = !!e.round?.ongoing;
   let status = game?.status || parsed?.headers?.Result || '*';
   let n = parsed ? parsed.fens.length - 1 : 0;

@@ -5,6 +5,7 @@ import {
   searchBroadcasts,
 } from '../api/lichess.js';
 import { renderTimeline } from '../ui/timeline.js';
+import { skeleton, emptyState, errorState } from '../ui/states.js';
 
 const DAY = 86400000;
 const LS_COLLAPSED = 'chesslive.timeline.collapsed';
@@ -289,10 +290,12 @@ export function renderHome(main) {
   async function loadCalendar(tiers) {
     const token = ++loadToken;
     aMap.clear();
+    let anyOk = false;
     for (const [year, month] of monthsAround(new Date(now), 2)) {
       try {
         const list = await getCalendarMonth(year, month, tiers);
-        if (token !== loadToken) return; // filter changed mid-flight
+        if (token !== loadToken) return anyOk; // filter changed mid-flight
+        anyOk = true;
         for (const it of list) {
           if (it.tour?.id) aMap.set(it.tour.id, it.tour);
         }
@@ -301,6 +304,7 @@ export function renderHome(main) {
         console.error(`[timeline] calendar ${year}-${month} failed:`, err);
       }
     }
+    return anyOk;
   }
 
   async function loadBroadcasts() {
@@ -310,8 +314,21 @@ export function renderHome(main) {
         if (rec.tour?.id) bMap.set(rec.tour.id, rec);
       }
       draw();
+      return true;
     } catch (err) {
       console.error('[timeline] broadcasts (B) failed:', err);
+      return false;
+    }
+  }
+
+  async function load() {
+    timeline.replaceChildren(skeleton('sk-timeline'));
+    const [calOk, bOk] = await Promise.all([loadCalendar(filter), loadBroadcasts()]);
+    if (collapsed) return;
+    if (!calOk && !bOk) {
+      timeline.replaceChildren(errorState('Could not reach Lichess.', load));
+    } else if (buildItems().length === 0) {
+      timeline.replaceChildren(emptyState('No tournaments to show.'));
     }
   }
 
@@ -358,6 +375,5 @@ export function renderHome(main) {
   });
 
   // --- Go -------------------------------------------------------------------
-  loadCalendar(filter);
-  loadBroadcasts();
+  load();
 }

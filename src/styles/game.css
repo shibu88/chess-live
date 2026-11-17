@@ -323,12 +323,28 @@
   background: var(--panel-head);
 }
 
-/* --- Narrow screens (basic stack; full mobile polish in Phase 6) ---------- */
+/* --- Narrow screens: stack per §5.4 (board · engine+moves · game list) ---- */
 @media (max-width: 900px) {
   .game-view {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
   }
   .gv-center {
-    order: -1;
+    order: 1;
+  }
+  .gv-right {
+    order: 2;
+  }
+  .gv-left {
+    order: 3;
+  }
+  .board-row,
+  .board-wrap,
+  .player-bar {
+    max-width: 100%;
+  }
+  .gv-moves {
+    max-height: none;
   }
 }

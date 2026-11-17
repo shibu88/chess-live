@@ -7,6 +7,18 @@ import {
 } from '../ui/gameList.js';
 import { startLiveRound, liveInfo } from '../live/liveRound.js';
 import { formatDateTime, formatDateRange } from '../lib/time.js';
+import { skeleton, errorState } from '../ui/states.js';
+
+function tournamentSkeleton() {
+  const frag = document.createDocumentFragment();
+  frag.append(skeleton('sk-line'), skeleton('sk-line'));
+  const pills = document.createElement('div');
+  pills.className = 'round-picker';
+  for (let i = 0; i < 6; i++) pills.append(skeleton('sk-pill'));
+  frag.append(pills);
+  for (let i = 0; i < 6; i++) frag.append(skeleton('sk-row'));
+  return frag;
+}
 
 // Only allow http(s) links (SPEC §5.3).
 function safeHttpUrl(url) {
@@ -57,16 +69,23 @@ function makePill(round, tourId, active) {
 export function renderTournament(main, { tourId, roundId }) {
   const wrap = document.createElement('div');
   wrap.className = 'tour-page';
-  const loading = document.createElement('p');
-  loading.textContent = 'Loading tournament…';
-  wrap.append(loading);
   main.append(wrap);
 
-  getTournament(tourId)
-    .then((d) => {
+  loadTournament();
+
+  function loadTournament() {
+    wrap.replaceChildren(tournamentSkeleton());
+    getTournament(tourId).then(onTournament).catch((err) => {
+      console.error('[tournament] tournament (D) failed:', err);
+      wrap.replaceChildren(errorState('Could not load this tournament.', loadTournament));
+    });
+  }
+
+  function onTournament(d) {
       wrap.replaceChildren();
       const tour = d.tour || {};
       const info = tour.info || {};
+      document.title = `${tour.name || 'Tournament'} · Chess Live`;
       const chosenId = chooseRoundId(d, roundId);
 
       // --- Header -----------------------------------------------------------
@@ -122,65 +141,60 @@ export function renderTournament(main, { tourId, roundId }) {
       // --- Game list --------------------------------------------------------
       const listWrap = document.createElement('div');
       listWrap.className = 'game-list';
-      const listLoading = document.createElement('p');
-      listLoading.textContent = 'Loading round…';
-      listWrap.append(listLoading);
       wrap.append(listWrap);
 
       if (!chosenId) {
         listWrap.replaceChildren();
         const none = document.createElement('p');
+        none.className = 'state-msg';
         none.textContent = 'This tournament has no rounds yet.';
         listWrap.append(none);
         return;
       }
 
-      getRound(chosenId)
-        .then((e) => {
-          renderGameList(listWrap, {
-            round: e.round,
-            games: e.games,
-            tourId,
-            roundId: chosenId,
-            backHref: '#/',
-          });
-          // Live updates while the round is ongoing (SPEC §5.4).
-          if (e.round?.ongoing) {
-            const thinkById = new Map(
-              (e.games || []).map((g) => [g.id, g.thinkTime || 0]),
-            );
-            const live = startLiveRound(chosenId, {
-              initialThink: (id) => thinkById.get(id) || 0,
-              onGame: (id, entry) => {
-                if (entry.parsed) {
-                  patchGameRow(listWrap, id, liveInfo(entry.parsed, entry.lastUpdateAt));
-                }
-              },
-            });
-            const stopTick = startClockTicker(listWrap);
-            window.addEventListener(
-              'hashchange',
-              () => {
-                live.close();
-                stopTick();
-              },
-              { once: true },
-            );
-          }
-        })
-        .catch((err) => {
-          console.error('[tournament] round (E) failed:', err);
-          listWrap.replaceChildren();
-          const msg = document.createElement('p');
-          msg.textContent = 'Could not load this round.';
-          listWrap.append(msg);
+      loadRound(listWrap, chosenId);
+  }
+
+  function loadRound(listWrap, chosenId) {
+    listWrap.replaceChildren(skeleton('sk-row'), skeleton('sk-row'), skeleton('sk-row'));
+    getRound(chosenId)
+      .then((e) => {
+        renderGameList(listWrap, {
+          round: e.round,
+          games: e.games,
+          tourId,
+          roundId: chosenId,
+          backHref: '#/',
         });
-    })
-    .catch((err) => {
-      console.error('[tournament] tournament (D) failed:', err);
-      wrap.replaceChildren();
-      const msg = document.createElement('p');
-      msg.textContent = 'Could not load this tournament.';
-      wrap.append(msg);
-    });
+        // Live updates while the round is ongoing (SPEC §5.4).
+        if (e.round?.ongoing) {
+          const thinkById = new Map(
+            (e.games || []).map((g) => [g.id, g.thinkTime || 0]),
+          );
+          const live = startLiveRound(chosenId, {
+            initialThink: (id) => thinkById.get(id) || 0,
+            onGame: (id, entry) => {
+              if (entry.parsed) {
+                patchGameRow(listWrap, id, liveInfo(entry.parsed, entry.lastUpdateAt));
+              }
+            },
+          });
+          const stopTick = startClockTicker(listWrap);
+          window.addEventListener(
+            'hashchange',
+            () => {
+              live.close();
+              stopTick();
+            },
+            { once: true },
+          );
+        }
+      })
+      .catch((err) => {
+        console.error('[tournament] round (E) failed:', err);
+        listWrap.replaceChildren(
+          errorState('Could not load this round.', () => loadRound(listWrap, chosenId)),
+        );
+      });
+  }
 }

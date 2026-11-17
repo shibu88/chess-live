@@ -103,3 +103,20 @@ a:hover {
   border-radius: var(--radius);
   padding: 16px;
 }
+
+/* Narrow screens: tighter gutters so it works down to 375px */
+@media (max-width: 600px) {
+  .site-header {
+    gap: 14px;
+    padding: 10px 14px;
+  }
+  .site-header .brand {
+    font-size: 16px;
+  }
+  .site-main {
+    padding: 14px;
+  }
+  .panel {
+    padding: 12px;
+  }
+}

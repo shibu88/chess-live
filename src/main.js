@@ -4,6 +4,7 @@ import './styles/theme.css';
 import './styles/home.css';
 import './styles/tournament.css';
 import './styles/game.css';
+import './styles/states.css';
 import { onStatus } from './api/lichess.js';
 import { renderHome } from './views/home.js';
 import { renderTournament } from './views/tournament.js';
@@ -81,10 +82,19 @@ function setActiveNav(name) {
   navAbout.classList.toggle('active', name === 'about');
 }
 
+// A default per-route title; the tournament/game views refine it after loading.
+const ROUTE_TITLES = {
+  home: 'Chess Live',
+  about: 'About · Chess Live',
+  tournament: 'Tournament · Chess Live',
+  game: 'Game · Chess Live',
+};
+
 function render() {
   const route = parseHash();
   main.replaceChildren(); // clear previous view
   setActiveNav(route.name);
+  document.title = ROUTE_TITLES[route.name] || 'Chess Live';
   switch (route.name) {
     case 'about':
       renderAbout(main);
