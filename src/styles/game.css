@@ -14,7 +14,33 @@
 }
 
 /* --- Board (§4.3) --------------------------------------------------------- */
+.board-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+  max-width: 578px;
+}
+.eval-bar-wrap {
+  flex: 0 0 12px;
+}
+.eval-bar {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #3a3733; /* Black's share */
+  border-radius: 2px;
+  overflow: hidden;
+}
+.eval-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: #e8e8e8; /* White's share */
+  transition: height 0.2s ease;
+}
 .board-wrap {
+  flex: 1 1 auto;
   width: 100%;
   max-width: 560px;
 }
@@ -198,6 +224,68 @@
 .ml-eval {
   color: var(--result-draw);
   font-size: 11px;
+}
+
+/* --- Engine box (§5.4, §5.5) --------------------------------------------- */
+.engine-box {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+.analyze-btn {
+  background: var(--page);
+  color: var(--text-bright);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.analyze-btn:hover {
+  background: var(--panel-head);
+}
+.analyze-btn.on {
+  background: var(--result-win);
+  border-color: var(--result-win);
+  color: #fff;
+}
+.eval-text {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-bright);
+  font-variant-numeric: tabular-nums;
+  min-height: 34px;
+  margin-top: 8px;
+}
+.engine-info {
+  font-size: 11px;
+  color: var(--result-draw);
+}
+.best-line {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text);
+  min-height: 18px;
+  word-break: break-word;
+}
+.analyze-all-btn {
+  margin-top: 8px;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.analyze-all-btn:hover {
+  background: var(--panel-head);
+  color: var(--text-bright);
 }
 
 .live-btn {

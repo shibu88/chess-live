@@ -152,6 +152,35 @@ export function parseGame(block) {
   return { headers, sans, fens, lastMove, check, clockWhite, clockBlack, evals };
 }
 
+/**
+ * Convert a UCI principal variation to a numbered SAN string from `fen`
+ * (SPEC §5.5 best line). Stops at the first move it can't play; `maxPlies` caps.
+ */
+export function pvToSan(fen, pvUci, maxPlies = 8) {
+  const c = new Chess(fen);
+  const fields = fen.split(' ');
+  let num = Number(fields[5]) || 1;
+  let white = fields[1] !== 'b';
+  const parts = [];
+  for (let i = 0; i < Math.min(pvUci.length, maxPlies); i++) {
+    const uci = pvUci[i];
+    let mv;
+    try {
+      mv = c.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
+    } catch {
+      break;
+    }
+    if (white) parts.push(`${num}.`, mv.san);
+    else {
+      if (i === 0) parts.push(`${num}...`);
+      parts.push(mv.san);
+      num++;
+    }
+    white = !white;
+  }
+  return parts.join(' ');
+}
+
 /** Find and parse the game whose GameURL matches `gameId`, else null. */
 export function parseRoundGame(pgnText, gameId) {
   for (const block of splitGames(pgnText)) {
