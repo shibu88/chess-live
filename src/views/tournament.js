@@ -1,6 +1,11 @@
 // Tournament page (SPEC §5.3): header, round picker, game list. No stream yet.
 import { getTournament, getRound } from '../api/lichess.js';
-import { renderGameList } from '../ui/gameList.js';
+import {
+  renderGameList,
+  patchGameRow,
+  startClockTicker,
+} from '../ui/gameList.js';
+import { startLiveRound, liveInfo } from '../live/liveRound.js';
 import { formatDateTime, formatDateRange } from '../lib/time.js';
 
 // Only allow http(s) links (SPEC §5.3).
@@ -139,6 +144,29 @@ export function renderTournament(main, { tourId, roundId }) {
             roundId: chosenId,
             backHref: '#/',
           });
+          // Live updates while the round is ongoing (SPEC §5.4).
+          if (e.round?.ongoing) {
+            const thinkById = new Map(
+              (e.games || []).map((g) => [g.id, g.thinkTime || 0]),
+            );
+            const live = startLiveRound(chosenId, {
+              initialThink: (id) => thinkById.get(id) || 0,
+              onGame: (id, entry) => {
+                if (entry.parsed) {
+                  patchGameRow(listWrap, id, liveInfo(entry.parsed, entry.lastUpdateAt));
+                }
+              },
+            });
+            const stopTick = startClockTicker(listWrap);
+            window.addEventListener(
+              'hashchange',
+              () => {
+                live.close();
+                stopTick();
+              },
+              { once: true },
+            );
+          }
         })
         .catch((err) => {
           console.error('[tournament] round (E) failed:', err);

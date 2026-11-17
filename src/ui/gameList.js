@@ -1,7 +1,8 @@
 // Game list for a broadcast round (SPEC §5.3), styled like Lichess's.
 // Pure renderer from endpoint-E data. Reused by the Phase-3 game viewer.
 import { makeFlag } from './flag.js';
-import { formatClock, formatDateTime } from '../lib/time.js';
+import { formatClock, formatDateTime, liveCentis } from '../lib/time.js';
+import { evalToWhitePct } from '../lib/eval.js';
 
 function resultFor(status, color) {
   if (status === '1-0') return color === 'white' ? '1' : '0';
@@ -54,6 +55,7 @@ function playerLine(player, game, color) {
 
   const right = document.createElement('span');
   right.className = 'gl-right';
+  right.dataset.color = color;
   fillRight(right, p, game, color);
 
   line.append(left, right);
@@ -64,6 +66,7 @@ function makeRow(game, board, { tourId, roundId, currentGameId }) {
   const row = document.createElement('a');
   row.className = 'gl-row' + (game.id === currentGameId ? ' current' : '');
   row.href = `#/t/${tourId}/${roundId}/${game.id}`;
+  row.dataset.gameId = game.id;
   const [white, black] = game.players || [{}, {}];
   row.dataset.players = `${white?.name || ''} ${black?.name || ''}`.toLowerCase();
 
@@ -156,4 +159,72 @@ export function renderGameList(container, opts) {
     }
   });
   filterBox.addEventListener('input', () => applyFilter(filterBox.value));
+}
+
+// --- Live updates (SPEC §5.4) ---------------------------------------------
+
+function rightCellContent(right, color, live) {
+  right.replaceChildren();
+  if (live.status && live.status !== '*') {
+    const r = resultFor(live.status, color);
+    if (r != null) {
+      const box = document.createElement('span');
+      box.className =
+        'gl-result ' + (r === '1' ? 'win' : r === '0' ? 'loss' : 'draw');
+      box.textContent = r;
+      right.append(box);
+    }
+    return;
+  }
+  const base = color === 'white' ? live.clockWhite : live.clockBlack;
+  if (base != null) {
+    const c = document.createElement('span');
+    c.className = 'gl-clock' + (base < 1000 ? ' low' : '');
+    c.textContent = formatClock(base);
+    right.append(c);
+  }
+}
+
+/**
+ * Patch one row from a live snapshot. Stores `live` on the row for the ticker.
+ * live = { status, clockWhite, clockBlack, sideToMove, lastUpdateAt, eval }.
+ */
+export function patchGameRow(container, gameId, live) {
+  const row = container.querySelector(
+    `.gl-row[data-game-id="${CSS.escape(gameId)}"]`,
+  );
+  if (!row) return;
+  row._live = live;
+
+  const fill = row.querySelector('.gl-eval-fill');
+  if (fill) fill.style.height = evalToWhitePct(live.eval) + '%';
+
+  for (const color of ['white', 'black']) {
+    const right = row.querySelector(`.gl-right[data-color="${color}"]`);
+    if (right) rightCellContent(right, color, live);
+  }
+}
+
+/**
+ * Start a 1 s ticker that counts down the side-to-move clock in each live row.
+ * Returns a stop function.
+ */
+export function startClockTicker(container) {
+  const id = setInterval(() => {
+    for (const row of container.querySelectorAll('.gl-row')) {
+      const live = row._live;
+      if (!live || (live.status && live.status !== '*') || !live.sideToMove) continue;
+      const base =
+        live.sideToMove === 'white' ? live.clockWhite : live.clockBlack;
+      const rem = liveCentis(base, live.lastUpdateAt);
+      const cell = row.querySelector(
+        `.gl-right[data-color="${live.sideToMove}"] .gl-clock`,
+      );
+      if (cell && rem != null) {
+        cell.textContent = formatClock(rem);
+        cell.classList.toggle('low', rem < 1000);
+      }
+    }
+  }, 1000);
+  return () => clearInterval(id);
 }

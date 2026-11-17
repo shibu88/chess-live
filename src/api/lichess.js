@@ -159,3 +159,75 @@ export function getRoundPgn(roundId) {
     enqueue(() => request(path, { parse: 'text' })),
   );
 }
+
+// --- F — Live PGN stream of a round (SPEC §3.3, §3.4) ----------------------
+// Separate from the queue. Only ONE stream may be open at a time.
+let activeStream = null;
+const RECONNECT_DELAYS = [5000, 15000, 60000]; // then stays at 60 s
+
+/**
+ * Open the live PGN stream for a round. Calls `onGame(pgnBlock)` for each
+ * complete game block (`[Event …`). Reconnects with backoff if it drops while
+ * still active. Returns `{ close() }`. Opening closes any prior stream.
+ */
+export function streamRoundPgn(roundId, { onGame, onConnect, onDrop } = {}) {
+  if (activeStream) activeStream.close();
+
+  const url = `${BASE}/api/stream/broadcast/round/${roundId}.pgn`;
+  const handle = { closed: false, controller: null, timer: null, attempt: 0 };
+
+  async function connect() {
+    if (handle.closed) return;
+    handle.controller = new AbortController();
+    let got = false;
+    try {
+      const res = await fetch(url, { signal: handle.controller.signal });
+      if (!res.ok) throw new Error(`stream ${res.status}`);
+      const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+      let buffer = '';
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (!got) {
+          got = true;
+          handle.attempt = 0; // a successful read resets the backoff
+          onConnect?.();
+        }
+        buffer += value;
+        const pieces = buffer.split('\n\n\n');
+        buffer = pieces.pop(); // keep the trailing partial
+        for (const piece of pieces) {
+          const block = piece.trim();
+          if (block.startsWith('[Event ')) onGame?.(block);
+        }
+      }
+      // Flush a complete final block if the stream ended cleanly.
+      const tail = buffer.trim();
+      if (tail.startsWith('[Event ')) onGame?.(tail);
+    } catch (err) {
+      if (handle.closed || err?.name === 'AbortError') return;
+    }
+    // Dropped while still active → reconnect with backoff.
+    if (handle.closed) return;
+    onDrop?.();
+    const delay = RECONNECT_DELAYS[Math.min(handle.attempt, RECONNECT_DELAYS.length - 1)];
+    handle.attempt += 1;
+    handle.timer = setTimeout(connect, delay);
+  }
+
+  function close() {
+    handle.closed = true;
+    if (handle.timer) clearTimeout(handle.timer);
+    try {
+      handle.controller?.abort();
+    } catch {
+      /* already aborted */
+    }
+    if (activeStream === api) activeStream = null;
+  }
+
+  const api = { close };
+  activeStream = api;
+  connect();
+  return api;
+}

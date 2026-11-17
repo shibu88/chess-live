@@ -1,12 +1,19 @@
 // Game viewer (SPEC §5.4): three columns — game list · board + player bars ·
-// move list + controls. Finished games only this phase (no live updates, no
-// engine). Players from E (getRound); moves/clocks/evals from G (getRoundPgn).
+// move list + controls. Players from E (getRound); moves/clocks/evals from G
+// (getRoundPgn), then live updates from the PGN stream (F) while the round is
+// ongoing: follow-live, a red "● Live" button, ticking clocks, auto-close.
 import { getRound, getRoundPgn } from '../api/lichess.js';
 import { parseRoundGame } from '../lib/pgn.js';
 import { renderBoard } from '../ui/board.js';
 import { renderPlayerBar } from '../ui/playerBar.js';
 import { renderMoveList } from '../ui/moveList.js';
-import { renderGameList } from '../ui/gameList.js';
+import {
+  renderGameList,
+  patchGameRow,
+  startClockTicker,
+} from '../ui/gameList.js';
+import { startLiveRound, liveInfo, sideToMoveOf } from '../live/liveRound.js';
+import { liveCentis } from '../lib/time.js';
 
 export function renderGame(main, { tourId, roundId, gameId }) {
   const wrap = document.createElement('div');
@@ -35,8 +42,11 @@ function renderViewer(wrap, { e, game, parsed, tourId, roundId, gameId }) {
   wrap.replaceChildren();
 
   const players = game?.players || [{}, {}];
-  const status = game?.status || parsed?.headers?.Result || '*';
-  const n = parsed ? parsed.fens.length - 1 : 0;
+  const roundLive = !!e.round?.ongoing;
+  let status = game?.status || parsed?.headers?.Result || '*';
+  let n = parsed ? parsed.fens.length - 1 : 0;
+  // When the latest move for this game arrived (seeded from E's thinkTime).
+  let liveEntry = { lastUpdateAt: Date.now() - (game?.thinkTime || 0) * 1000 };
 
   const state = { ply: n, orientation: 'white' };
 
@@ -62,15 +72,21 @@ function renderViewer(wrap, { e, game, parsed, tourId, roundId, gameId }) {
 
   const right = document.createElement('div');
   right.className = 'gv-right';
+  const liveBtn = document.createElement('button');
+  liveBtn.type = 'button';
+  liveBtn.className = 'live-btn';
+  liveBtn.textContent = '● Live';
+  liveBtn.hidden = true;
+  liveBtn.addEventListener('click', () => go(n));
   const moves = document.createElement('div');
   moves.className = 'gv-moves';
   const controls = document.createElement('div');
   controls.className = 'gv-controls';
-  right.append(moves, controls);
+  right.append(liveBtn, moves, controls);
 
   wrap.append(left, center, right);
 
-  // --- Navigation controls --------------------------------------------------
+  // --- Navigation -----------------------------------------------------------
   const go = (p) => {
     state.ply = Math.max(0, Math.min(n, p));
     draw();
@@ -95,7 +111,63 @@ function renderViewer(wrap, { e, game, parsed, tourId, roundId, gameId }) {
     controls.append(b);
   }
 
-  // --- Keyboard (removed on next route change) -------------------------------
+  // --- Clocks ---------------------------------------------------------------
+  function clockFor(color) {
+    if (!parsed) return null;
+    const base =
+      color === 'white'
+        ? parsed.clockWhite[state.ply]
+        : parsed.clockBlack[state.ply];
+    // Tick only the side to move, at the latest ply of a live unfinished game.
+    if (roundLive && status === '*' && state.ply === n) {
+      if (color === sideToMoveOf(parsed.fens[n])) {
+        return liveCentis(base, liveEntry.lastUpdateAt);
+      }
+    }
+    return base; // frozen
+  }
+
+  function drawBars() {
+    const flipped = state.orientation === 'black';
+    const topColor = flipped ? 'white' : 'black'; // Black on top unless flipped
+    const botColor = flipped ? 'black' : 'white';
+    const topPlayer = topColor === 'white' ? players[0] : players[1];
+    const botPlayer = botColor === 'white' ? players[0] : players[1];
+    topSlot.replaceChildren(
+      renderPlayerBar({ player: topPlayer, status, color: topColor, clock: clockFor(topColor) }),
+    );
+    botSlot.replaceChildren(
+      renderPlayerBar({ player: botPlayer, status, color: botColor, clock: clockFor(botColor) }),
+    );
+  }
+
+  // --- Draw -----------------------------------------------------------------
+  function draw() {
+    drawBars();
+    liveBtn.hidden = !(roundLive && status === '*' && state.ply < n);
+
+    if (!parsed) {
+      boardWrap.textContent = 'Moves not available for this game yet.';
+      moves.replaceChildren();
+      return;
+    }
+    renderBoard(boardWrap, {
+      fen: parsed.fens[state.ply],
+      orientation: state.orientation,
+      lastMove: parsed.lastMove[state.ply],
+      checkSquare: parsed.check[state.ply],
+    });
+    renderMoveList(moves, {
+      sans: parsed.sans,
+      evals: parsed.evals,
+      currentPly: state.ply,
+      onPick: go,
+    });
+  }
+
+  draw();
+
+  // --- Keyboard -------------------------------------------------------------
   const onKey = (ev) => {
     if (ev.target && /^(INPUT|TEXTAREA)$/.test(ev.target.tagName)) return;
     switch (ev.key) {
@@ -108,55 +180,40 @@ function renderViewer(wrap, { e, game, parsed, tourId, roundId, gameId }) {
     }
   };
   window.addEventListener('keydown', onKey);
-  window.addEventListener(
-    'hashchange',
-    () => window.removeEventListener('keydown', onKey),
-    { once: true },
-  );
 
-  // --- Draw -----------------------------------------------------------------
-  function draw() {
-    const flipped = state.orientation === 'black';
-    // Black on top unless flipped.
-    const topColor = flipped ? 'white' : 'black';
-    const botColor = flipped ? 'black' : 'white';
-    const topPlayer = topColor === 'white' ? players[0] : players[1];
-    const botPlayer = botColor === 'white' ? players[0] : players[1];
+  // --- Live (stream F) ------------------------------------------------------
+  const cleanups = [() => window.removeEventListener('keydown', onKey)];
 
-    const clk = (color) =>
-      parsed
-        ? color === 'white'
-          ? parsed.clockWhite[state.ply]
-          : parsed.clockBlack[state.ply]
-        : null;
-
-    topSlot.replaceChildren(
-      renderPlayerBar({ player: topPlayer, status, color: topColor, clock: clk(topColor) }),
+  if (roundLive) {
+    const thinkById = new Map(
+      (e.games || []).map((g) => [g.id, g.thinkTime || 0]),
     );
-    botSlot.replaceChildren(
-      renderPlayerBar({ player: botPlayer, status, color: botColor, clock: clk(botColor) }),
-    );
-
-    if (!parsed) {
-      boardWrap.textContent = 'Moves not available for this game yet.';
-      moves.replaceChildren();
-      return;
-    }
-
-    renderBoard(boardWrap, {
-      fen: parsed.fens[state.ply],
-      orientation: state.orientation,
-      lastMove: parsed.lastMove[state.ply],
-      checkSquare: parsed.check[state.ply],
+    const live = startLiveRound(roundId, {
+      initialThink: (id) => thinkById.get(id) || 0,
+      onGame: (id, entry) => {
+        if (entry.parsed) {
+          patchGameRow(left, id, liveInfo(entry.parsed, entry.lastUpdateAt));
+        }
+        if (id !== gameId || !entry.parsed) return;
+        // Update the open game.
+        const wasAtLatest = state.ply === n;
+        parsed = entry.parsed;
+        n = parsed.fens.length - 1;
+        const result = parsed.headers.Result;
+        status = result && result !== '*' ? result : '*';
+        liveEntry = entry;
+        if (wasAtLatest) state.ply = n; // follow the latest move
+        draw();
+      },
     });
-
-    renderMoveList(moves, {
-      sans: parsed.sans,
-      evals: parsed.evals,
-      currentPly: state.ply,
-      onPick: go,
-    });
+    const stopListTick = startClockTicker(left);
+    const barTick = setInterval(drawBars, 1000); // tick the centre clocks
+    cleanups.push(live.close, stopListTick, () => clearInterval(barTick));
   }
 
-  draw();
+  window.addEventListener(
+    'hashchange',
+    () => cleanups.forEach((fn) => fn()),
+    { once: true },
+  );
 }

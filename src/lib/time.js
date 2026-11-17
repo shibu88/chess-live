@@ -16,6 +16,16 @@ export function formatClock(centis) {
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
 }
 
+/**
+ * Live ticking clock: a side's remaining centiseconds now, counting down from
+ * `baseCentis` (its last known time) by the time since `lastUpdateAt` (ms).
+ * Never below 0.
+ */
+export function liveCentis(baseCentis, lastUpdateAt) {
+  if (baseCentis == null) return null;
+  return Math.max(0, baseCentis - (Date.now() - lastUpdateAt) / 10);
+}
+
 /** Local date + time, e.g. "17 Nov 2026, 14:30". */
 export function formatDateTime(ms) {
   if (ms == null) return '';

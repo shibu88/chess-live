@@ -200,6 +200,22 @@
   font-size: 11px;
 }
 
+.live-btn {
+  align-self: flex-start;
+  margin-bottom: 8px;
+  background: var(--tl-live, #dc2626);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  padding: 6px 14px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+.live-btn:hover {
+  filter: brightness(1.1);
+}
+
 .gv-controls {
   display: flex;
   gap: 6px;
