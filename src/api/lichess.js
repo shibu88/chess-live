@@ -148,3 +148,14 @@ export function getRound(roundId) {
   const path = `/api/broadcast/-/-/${roundId}`;
   return enqueue(() => request(path));
 }
+
+/**
+ * G — All games of a round as PGN (one-off). Fine for finished rounds; never
+ * poll it (live updates use the stream F in Phase 4). Cached 10 min by round.
+ */
+export function getRoundPgn(roundId) {
+  const path = `/api/broadcast/round/${roundId}.pgn`;
+  return cached(`G:${roundId}`, TEN_MIN, () =>
+    enqueue(() => request(path, { parse: 'text' })),
+  );
+}
