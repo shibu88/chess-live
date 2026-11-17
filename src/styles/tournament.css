@@ -1,0 +1,252 @@
+/* Tournament page — header, round picker, game list (SPEC §5.3, §4.4) */
+
+.tour-page {
+  max-width: 1100px;
+}
+
+/* Header */
+.tour-header {
+  margin-bottom: 14px;
+}
+.tour-name {
+  margin: 0 0 6px;
+  font-size: 22px;
+  color: var(--text-bright);
+}
+.tour-info {
+  color: var(--text);
+  font-size: 14px;
+}
+.tour-links {
+  margin-top: 8px;
+  display: flex;
+  gap: 14px;
+}
+.tour-links a {
+  color: var(--tl-upcoming, #3b82f6);
+  font-size: 13px;
+}
+
+/* Round picker — a sideways-scrolling row of pills */
+.round-picker {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  margin-bottom: 14px;
+}
+.round-pill {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  white-space: nowrap;
+}
+.round-pill:hover {
+  background: var(--panel-head);
+}
+.round-pill.active {
+  border-color: var(--nav-pill, #4a315a);
+  background: var(--nav-pill, #4a315a);
+  color: var(--text-bright);
+}
+.rp-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+.rp-status {
+  font-size: 11px;
+  color: var(--text);
+}
+.round-pill.active .rp-status {
+  color: var(--text-bright);
+}
+.round-pill.finished .rp-status {
+  color: var(--result-win);
+}
+.round-pill.live .rp-status {
+  color: var(--tl-live, #dc2626);
+  font-weight: 700;
+}
+
+/* Game list */
+.game-list {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.gl-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--panel-head);
+  border-bottom: 1px solid var(--border);
+}
+.gl-back {
+  font-size: 18px;
+  color: var(--text-bright);
+  line-height: 1;
+}
+.gl-round {
+  font-weight: 600;
+  color: var(--text-bright);
+}
+.gl-search-btn {
+  margin-left: auto;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 15px;
+  padding: 2px 4px;
+}
+.gl-filter {
+  margin: 8px 12px;
+  width: calc(100% - 24px);
+}
+.gl-empty {
+  padding: 16px 12px;
+  color: var(--text);
+}
+
+.gl-list {
+  display: flex;
+  flex-direction: column;
+}
+.gl-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  padding: 6px 12px 6px 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+.gl-row:last-child {
+  border-bottom: none;
+}
+/* `display: flex` above would otherwise override the [hidden] attribute the
+   player filter sets, so re-assert display:none for hidden rows. */
+.gl-row[hidden] {
+  display: none;
+}
+.gl-row:hover {
+  background: var(--panel-head);
+}
+.gl-row.current {
+  background: var(--nav-pill, #4a315a);
+}
+
+/* Mini eval bar (neutral 50% this phase) */
+.gl-eval {
+  flex: 0 0 4px;
+  align-self: stretch;
+  background: #111;
+  position: relative;
+}
+.gl-eval-fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #e8e8e8;
+}
+
+.gl-num {
+  flex: 0 0 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--result-draw);
+}
+.gl-players {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.gl-player {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.gl-pleft {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.gl-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-bright);
+}
+.gl-title {
+  color: var(--title);
+  font-weight: 700;
+  font-size: 12px;
+}
+.gl-right {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding-left: 8px;
+}
+
+/* Results + clocks */
+.gl-result {
+  font-weight: 700;
+  min-width: 14px;
+  display: inline-block;
+  text-align: center;
+}
+.gl-result.win {
+  color: var(--result-win);
+}
+.gl-result.loss {
+  color: var(--result-loss);
+}
+.gl-result.draw {
+  color: var(--result-draw);
+}
+.gl-clock {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.gl-clock.low {
+  color: var(--result-loss);
+}
+
+/* Flags (§4.4) */
+.flag {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+.flag .fi {
+  width: 20px;
+  height: 15px;
+  border-radius: 2px;
+  line-height: 15px;
+}
+.flag-globe {
+  font-size: 13px;
+  line-height: 15px;
+}
+.flag-code {
+  font-size: 9px;
+  font-weight: 700;
+  background: #3a3733;
+  color: var(--text);
+  padding: 1px 3px;
+  border-radius: 2px;
+  letter-spacing: 0.5px;
+}

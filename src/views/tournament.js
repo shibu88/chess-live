@@ -1,13 +1,158 @@
-// Tournament view — rounds + game list (Phase 2). Phase 0: placeholder.
+// Tournament page (SPEC §5.3): header, round picker, game list. No stream yet.
+import { getTournament, getRound } from '../api/lichess.js';
+import { renderGameList } from '../ui/gameList.js';
+import { formatDateTime, formatDateRange } from '../lib/time.js';
+
+// Only allow http(s) links (SPEC §5.3).
+function safeHttpUrl(url) {
+  return typeof url === 'string' && /^https?:\/\//.test(url) ? url : null;
+}
+
+function chooseRoundId(d, urlRoundId) {
+  const rounds = d.rounds || [];
+  const has = (id) => id && rounds.some((r) => r.id === id);
+  if (has(urlRoundId)) return urlRoundId;
+  if (has(d.defaultRoundId)) return d.defaultRoundId;
+  const ongoing = rounds.find((r) => r.ongoing);
+  if (ongoing) return ongoing.id;
+  const finished = [...rounds].reverse().find((r) => r.finishedAt);
+  if (finished) return finished.id;
+  return rounds[0]?.id;
+}
+
+function makePill(round, tourId, active) {
+  const pill = document.createElement('a');
+  pill.className = 'round-pill' + (active ? ' active' : '');
+  pill.href = `#/t/${tourId}/${round.id}`;
+
+  const name = document.createElement('span');
+  name.className = 'rp-name';
+  name.textContent = round.name || '';
+
+  const status = document.createElement('span');
+  status.className = 'rp-status';
+  if (round.finishedAt) {
+    status.textContent = '✓';
+    pill.classList.add('finished');
+  } else if (round.ongoing) {
+    status.textContent = '● live';
+    pill.classList.add('live');
+  } else if (round.startsAfterPrevious) {
+    status.textContent = 'after previous round';
+    pill.classList.add('upcoming');
+  } else if (round.startsAt) {
+    status.textContent = formatDateTime(round.startsAt);
+    pill.classList.add('upcoming');
+  }
+
+  pill.append(name, status);
+  return pill;
+}
+
 export function renderTournament(main, { tourId, roundId }) {
-  const panel = document.createElement('div');
-  panel.className = 'panel';
-  const h = document.createElement('h2');
-  h.textContent = 'Tournament';
-  const p = document.createElement('p');
-  p.textContent = roundId
-    ? `tour ${tourId} · round ${roundId} — coming in Phase 2.`
-    : `tour ${tourId} — coming in Phase 2.`;
-  panel.append(h, p);
-  main.append(panel);
+  const wrap = document.createElement('div');
+  wrap.className = 'tour-page';
+  const loading = document.createElement('p');
+  loading.textContent = 'Loading tournament…';
+  wrap.append(loading);
+  main.append(wrap);
+
+  getTournament(tourId)
+    .then((d) => {
+      wrap.replaceChildren();
+      const tour = d.tour || {};
+      const info = tour.info || {};
+      const chosenId = chooseRoundId(d, roundId);
+
+      // --- Header -----------------------------------------------------------
+      const header = document.createElement('div');
+      header.className = 'tour-header';
+      const h1 = document.createElement('h1');
+      h1.className = 'tour-name';
+      h1.textContent = tour.name || 'Tournament';
+      header.append(h1);
+
+      const infoParts = [
+        info.format,
+        info.tc,
+        info.location,
+        formatDateRange(tour.dates),
+      ].filter(Boolean);
+      if (infoParts.length) {
+        const line = document.createElement('div');
+        line.className = 'tour-info';
+        line.textContent = infoParts.join(' · ');
+        header.append(line);
+      }
+
+      const links = document.createElement('div');
+      links.className = 'tour-links';
+      for (const [label, url] of [
+        ['Official site', safeHttpUrl(info.website)],
+        ['Standings', safeHttpUrl(info.standings)],
+      ]) {
+        if (!url) continue;
+        const a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.textContent = label;
+        links.append(a);
+      }
+      if (links.childElementCount) header.append(links);
+      wrap.append(header);
+
+      // --- Round picker -----------------------------------------------------
+      const picker = document.createElement('div');
+      picker.className = 'round-picker';
+      let activePill = null;
+      for (const r of d.rounds || []) {
+        const pill = makePill(r, tourId, r.id === chosenId);
+        if (r.id === chosenId) activePill = pill;
+        picker.append(pill);
+      }
+      wrap.append(picker);
+      if (activePill) activePill.scrollIntoView({ inline: 'center', block: 'nearest' });
+
+      // --- Game list --------------------------------------------------------
+      const listWrap = document.createElement('div');
+      listWrap.className = 'game-list';
+      const listLoading = document.createElement('p');
+      listLoading.textContent = 'Loading round…';
+      listWrap.append(listLoading);
+      wrap.append(listWrap);
+
+      if (!chosenId) {
+        listWrap.replaceChildren();
+        const none = document.createElement('p');
+        none.textContent = 'This tournament has no rounds yet.';
+        listWrap.append(none);
+        return;
+      }
+
+      getRound(chosenId)
+        .then((e) => {
+          renderGameList(listWrap, {
+            round: e.round,
+            games: e.games,
+            tourId,
+            roundId: chosenId,
+            backHref: '#/',
+          });
+        })
+        .catch((err) => {
+          console.error('[tournament] round (E) failed:', err);
+          listWrap.replaceChildren();
+          const msg = document.createElement('p');
+          msg.textContent = 'Could not load this round.';
+          listWrap.append(msg);
+        });
+    })
+    .catch((err) => {
+      console.error('[tournament] tournament (D) failed:', err);
+      wrap.replaceChildren();
+      const msg = document.createElement('p');
+      msg.textContent = 'Could not load this tournament.';
+      wrap.append(msg);
+    });
 }

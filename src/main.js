@@ -1,6 +1,8 @@
 // Chess Live — app shell + hash router (SPEC §2).
+import 'flag-icons/css/flag-icons.min.css';
 import './styles/theme.css';
 import './styles/home.css';
+import './styles/tournament.css';
 import { onStatus } from './api/lichess.js';
 import { renderHome } from './views/home.js';
 import { renderTournament } from './views/tournament.js';

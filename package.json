@@ -13,5 +13,8 @@
   "license": "ISC",
   "devDependencies": {
     "vite": "^8.3.8"
+  },
+  "dependencies": {
+    "flag-icons": "^7.6.0"
   }
 }
