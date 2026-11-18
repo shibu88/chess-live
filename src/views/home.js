@@ -14,6 +14,8 @@ const DAY = 86400000;
 const LS_COLLAPSED = 'chesslive.timeline.collapsed';
 const LS_FILTER = 'chesslive.timeline.filter';
 const LS_COUNTRY = 'chesslive.timeline.country';
+const LS_CAL = 'chesslive.cal.'; // + tiers key → cached calendar for instant paint
+const CAL_TTL = 24 * 60 * 60 * 1000; // show a saved calendar for up to a day
 
 // --- localStorage helpers (always wrapped — SPEC browser-storage rule) ------
 function lsGet(key, fallback) {
@@ -281,33 +283,81 @@ export function renderHome(main) {
   }
 
   // --- Data loading ---------------------------------------------------------
+  // Centre-out order (0, +1, -1, +2, -2) so today's month — the visible,
+  // centred part of the graph — loads first through the one-at-a-time queue.
   function monthsAround(center, span) {
-    const out = [];
     const base = new Date(center.getFullYear(), center.getMonth(), 1);
-    for (let i = -span; i <= span; i++) {
+    const offsets = [0];
+    for (let i = 1; i <= span; i++) offsets.push(i, -i);
+    return offsets.map((i) => {
       const d = new Date(base.getFullYear(), base.getMonth() + i, 1);
-      out.push([d.getFullYear(), d.getMonth() + 1]);
+      return [d.getFullYear(), d.getMonth() + 1];
+    });
+  }
+
+  // Calendar localStorage cache — a slim copy so a repeat open paints the whole
+  // graph instantly, before the fresh fetch returns.
+  const calKey = (tiers) => LS_CAL + (tiers || 'all');
+
+  function primeFromCache(tiers) {
+    try {
+      const data = JSON.parse(lsGet(calKey(tiers), '') || 'null');
+      if (!data || data.v !== 1 || !Array.isArray(data.tours)) return false;
+      if (Date.now() - (data.savedAt || 0) > CAL_TTL) return false;
+      aMap.clear();
+      for (const t of data.tours) if (t?.id) aMap.set(t.id, t);
+      return aMap.size > 0;
+    } catch {
+      return false;
     }
-    return out;
+  }
+
+  function saveToCache(tiers) {
+    // Keep only the fields the home graph/columns use (keeps it small).
+    const tours = [...aMap.values()].map((t) => ({
+      id: t.id,
+      name: t.name,
+      slug: t.slug,
+      tier: t.tier,
+      dates: t.dates,
+      info: t.info ? { location: t.info.location, format: t.info.format } : undefined,
+    }));
+    lsSet(calKey(tiers), JSON.stringify({ v: 1, savedAt: Date.now(), tours }));
   }
 
   async function loadCalendar(tiers) {
     const token = ++loadToken;
-    aMap.clear();
+    // Instant paint from the last saved copy for this filter, then refresh.
+    if (primeFromCache(tiers)) draw();
+    else aMap.clear();
+
+    const fresh = new Map();
     let anyOk = false;
+    let allOk = true;
     for (const [year, month] of monthsAround(new Date(now), 2)) {
       try {
         const list = await getCalendarMonth(year, month, tiers);
         if (token !== loadToken) return anyOk; // filter changed mid-flight
         anyOk = true;
         for (const it of list) {
-          if (it.tour?.id) aMap.set(it.tour.id, it.tour);
+          if (it.tour?.id) {
+            fresh.set(it.tour.id, it.tour);
+            aMap.set(it.tour.id, it.tour);
+          }
         }
         draw(); // progressive: redraw as each month arrives
       } catch (err) {
+        allOk = false;
         console.error(`[timeline] calendar ${year}-${month} failed:`, err);
       }
     }
+    if (token !== loadToken) return anyOk;
+    if (allOk) {
+      // Drop any cache-primed tours that are gone from the fresh data.
+      for (const id of [...aMap.keys()]) if (!fresh.has(id)) aMap.delete(id);
+      draw();
+    }
+    if (anyOk) saveToCache(tiers);
     return anyOk;
   }
 

@@ -1,3 +1,6 @@
 node_modules/
 dist/
 public/engine/
+
+# Local Netlify folder
+.netlify
