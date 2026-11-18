@@ -85,7 +85,7 @@ export function renderTournament(main, { tourId, roundId }) {
       wrap.replaceChildren();
       const tour = d.tour || {};
       const info = tour.info || {};
-      document.title = `${tour.name || 'Tournament'} · Chess Live`;
+      document.title = `${tour.name || 'Tournament'} · Home`;
       const chosenId = chooseRoundId(d, roundId);
 
       // --- Header -----------------------------------------------------------

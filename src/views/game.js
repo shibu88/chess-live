@@ -59,7 +59,7 @@ function renderViewer(wrap, { e, game, parsed, tourId, roundId, gameId }) {
 
   const players = game?.players || [{}, {}];
   if (players[0]?.name && players[1]?.name) {
-    document.title = `${players[0].name} – ${players[1].name} · Chess Live`;
+    document.title = `${players[0].name} – ${players[1].name} · Home`;
   }
   const roundLive = !!e.round?.ongoing;
   let status = game?.status || parsed?.headers?.Result || '*';

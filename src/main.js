@@ -80,17 +80,17 @@ function setActiveNav(name) {
 
 // A default per-route title; the tournament/game views refine it after loading.
 const ROUTE_TITLES = {
-  home: 'Chess Live',
-  about: 'About · Chess Live',
-  tournament: 'Tournament · Chess Live',
-  game: 'Game · Chess Live',
+  home: 'Home',
+  about: 'About · Home',
+  tournament: 'Tournament · Home',
+  game: 'Game · Home',
 };
 
 function render() {
   const route = parseHash();
   main.replaceChildren(); // clear previous view
   setActiveNav(route.name);
-  document.title = ROUTE_TITLES[route.name] || 'Chess Live';
+  document.title = ROUTE_TITLES[route.name] || 'Home';
   switch (route.name) {
     case 'about':
       renderAbout(main);
