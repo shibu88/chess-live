@@ -67,6 +67,7 @@ a:hover {
 .site-header nav {
   display: flex;
   gap: 16px;
+  margin-left: auto; /* push nav (About) to the top-right corner */
 }
 .site-header nav a.active {
   color: var(--text-bright);

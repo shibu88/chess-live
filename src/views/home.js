@@ -5,11 +5,15 @@ import {
   searchBroadcasts,
 } from '../api/lichess.js';
 import { renderTimeline } from '../ui/timeline.js';
+import { renderColumns } from '../ui/tournamentColumns.js';
+import { renderFilterMenu } from '../ui/filterMenu.js';
+import { matchCountry } from '../lib/country.js';
 import { skeleton, emptyState, errorState } from '../ui/states.js';
 
 const DAY = 86400000;
 const LS_COLLAPSED = 'chesslive.timeline.collapsed';
 const LS_FILTER = 'chesslive.timeline.filter';
+const LS_COUNTRY = 'chesslive.timeline.country';
 
 // --- localStorage helpers (always wrapped — SPEC browser-storage rule) ------
 function lsGet(key, fallback) {
@@ -97,7 +101,8 @@ export function renderHome(main) {
   const now = Date.now();
 
   // State.
-  let filter = lsGet(LS_FILTER, 'best,high'); // "best" | "best,high" | ""
+  let filter = lsGet(LS_FILTER, 'best,high'); // tiers for "Official" view
+  let country = lsGet(LS_COUNTRY, '') || null; // FIDE code when a country is picked
   let collapsed = lsGet(LS_COLLAPSED, '0') === '1';
   const aMap = new Map(); // tour.id -> tour (from A)
   const bMap = new Map(); // tour.id -> bRec (from B)
@@ -117,26 +122,32 @@ export function renderHome(main) {
   const title = document.createElement('h2');
   title.textContent = 'Top tournaments';
 
-  const filterSel = document.createElement('select');
-  filterSel.className = 'filter';
-  for (const [value, label] of [
-    ['best', 'Top tier only'],
-    ['best,high', 'Top + high'],
-    ['', 'All official'],
-  ]) {
-    const opt = document.createElement('option');
-    opt.value = value;
-    opt.textContent = label;
-    filterSel.append(opt);
-  }
-  filterSel.value = filter;
+  const filterMenu = renderFilterMenu({
+    current: country ? { kind: 'country', fed: country } : { kind: 'official' },
+    onSelect: (sel) => {
+      // Changing the filter is a fresh start: re-centre the graph on today
+      // (like first load), instead of keeping the previous scroll position.
+      delete timeline.dataset.userScrolled;
+      if (sel.kind === 'country') {
+        country = sel.fed;
+        lsSet(LS_COUNTRY, country);
+        loadCalendar(''); // all official tiers; narrowed client-side by country
+      } else {
+        country = null;
+        filter = 'best,high';
+        lsSet(LS_COUNTRY, '');
+        lsSet(LS_FILTER, filter);
+        loadCalendar(filter);
+      }
+    },
+  });
 
   const legend = document.createElement('div');
   legend.className = 'legend';
   for (const [cls, text] of [
     ['past', 'Past'],
     ['playing', 'Playing now'],
-    ['live', 'Live'],
+    ['live', 'Ongoing'],
     ['upcoming', 'Upcoming'],
     ['expected', 'Expected'],
   ]) {
@@ -147,7 +158,7 @@ export function renderHome(main) {
     legend.append(span);
   }
 
-  head.append(collapseBtn, title, filterSel, legend);
+  head.append(collapseBtn, title, filterMenu, legend);
 
   const body = document.createElement('div');
   body.className = 'panel-body';
@@ -155,11 +166,9 @@ export function renderHome(main) {
   const timeline = document.createElement('div');
   timeline.className = 'timeline';
 
-  // Picker row: dropdown + search.
+  // Search bar (above the columns).
   const picker = document.createElement('div');
   picker.className = 'picker';
-  const tourSel = document.createElement('select');
-  tourSel.className = 'tour-select';
   const searchWrap = document.createElement('div');
   searchWrap.className = 'search-wrap';
   const searchInput = document.createElement('input');
@@ -168,9 +177,13 @@ export function renderHome(main) {
   const searchResults = document.createElement('ul');
   searchResults.className = 'search-results';
   searchWrap.append(searchInput, searchResults);
-  picker.append(tourSel, searchWrap);
+  picker.append(searchWrap);
 
-  body.append(timeline, picker);
+  // Past / Now / Upcoming card columns.
+  const columns = document.createElement('div');
+  columns.className = 'tl-columns-wrap';
+
+  body.append(timeline, picker, columns);
   panel.append(head, body);
   main.append(panel);
 
@@ -188,27 +201,36 @@ export function renderHome(main) {
     if (!collapsed) draw(); // recompute scroll once visible
   });
 
-  // --- Draw (timeline + dropdown) ------------------------------------------
-  // Does a tour's tier pass the current filter? (timeline bars only)
+  // --- Draw (timeline + columns) -------------------------------------------
+  // Does a tour's tier pass the "Official" filter? (used when no country picked)
   function tierAllowed(tier) {
     if (filter === 'best') return tier === 5;
     if (filter === 'best,high') return tier === 4 || tier === 5;
     return true; // All official
   }
 
+  // Active filter predicate: a country match when one is picked, else the tier.
+  // Applied to both the graph bars and the Past/Now/Upcoming columns so they
+  // always reflect the current selection.
+  function tourPasses(tour) {
+    if (country) return matchCountry(country, tour);
+    return tierAllowed(tour.tier);
+  }
+
   function buildItems() {
     const items = [];
     const seen = new Set();
     for (const tour of aMap.values()) {
+      if (!tourPasses(tour)) continue;
       const c = classify(tour, bMap.get(tour.id), now);
       items.push({ tour, tier: tour.tier, ...c });
       seen.add(tour.id);
     }
-    // Add live tours from B that fell outside the A window, but only if their
-    // tier passes the active filter — otherwise the filter has no effect.
+    // Add live tours from B that fell outside the A window, but only if they
+    // pass the active filter — otherwise the filter has no effect.
     for (const [id, bRec] of bMap) {
       if (seen.has(id)) continue;
-      if (!tierAllowed(bRec.tour.tier)) continue;
+      if (!tourPasses(bRec.tour)) continue;
       const c = classify(bRec.tour, bRec, now);
       if (c.status === 'live' || c.status === 'playing') {
         items.push({ tour: bRec.tour, tier: bRec.tour.tier, ...c });
@@ -217,63 +239,45 @@ export function renderHome(main) {
     return items;
   }
 
-  function buildDropdown(items) {
-    // Union of timeline tours and all B tours, classified, grouped.
+  const LEAGUE_SPAN = 40 * DAY; // a "league/season" runs this long or more
+
+  function buildColumns(items) {
+    // Union of timeline tours and all B tours, classified.
     const byId = new Map();
     for (const it of items) byId.set(it.tour.id, it);
     for (const [id, bRec] of bMap) {
-      if (!byId.has(id)) {
-        const c = classify(bRec.tour, bRec, now);
-        byId.set(id, { tour: bRec.tour, tier: bRec.tour.tier, ...c });
-      }
+      if (byId.has(id)) continue;
+      if (!tourPasses(bRec.tour)) continue;
+      const c = classify(bRec.tour, bRec, now);
+      byId.set(id, { tour: bRec.tour, tier: bRec.tour.tier, ...c });
     }
-    // "Playing now" tours belong with "Live now" in the dropdown.
-    const groups = { live: [], upcoming: [], past: [] };
+
+    const past = [];
+    const nowList = [];
+    const leagues = [];
+    const upcoming = [];
     for (const it of byId.values()) {
-      const key = it.status === 'playing' ? 'live' : it.status;
-      groups[key].push(it);
+      if (it.status === 'past') past.push(it);
+      else if (it.status === 'live' || it.status === 'playing') {
+        (it.barEnd - it.barStart >= LEAGUE_SPAN ? leagues : nowList).push(it);
+      } else upcoming.push(it);
     }
-    // Playing-now first, then alphabetical.
-    groups.live.sort(
-      (a, b) =>
-        Number(b.ongoingNow) - Number(a.ongoingNow) ||
-        a.tour.name.localeCompare(b.tour.name),
-    );
-    groups.upcoming.sort((a, b) => a.barStart - b.barStart);
-    groups.past.sort((a, b) => b.barStart - a.barStart);
+    past.sort((a, b) => b.barStart - a.barStart);
+    upcoming.sort((a, b) => a.barStart - b.barStart);
+    const liveSort = (a, b) =>
+      Number(b.ongoingNow) - Number(a.ongoingNow) ||
+      a.tour.name.localeCompare(b.tour.name);
+    nowList.sort(liveSort);
+    leagues.sort(liveSort);
 
-    const prev = tourSel.value;
-    tourSel.replaceChildren();
-    const placeholder = document.createElement('option');
-    placeholder.value = '';
-    placeholder.textContent = 'Jump to a tournament…';
-    tourSel.append(placeholder);
-
-    for (const [key, label] of [
-      ['live', 'Live now'],
-      ['upcoming', 'Upcoming'],
-      ['past', 'Finished'],
-    ]) {
-      if (!groups[key].length) continue;
-      const og = document.createElement('optgroup');
-      og.label = label;
-      for (const it of groups[key]) {
-        const opt = document.createElement('option');
-        opt.value = it.tour.id;
-        const loc = it.tour.info?.location;
-        opt.textContent = loc ? `${it.tour.name} · ${loc}` : it.tour.name;
-        og.append(opt);
-      }
-      tourSel.append(og);
-    }
-    if (prev) tourSel.value = prev;
+    renderColumns(columns, { past, now: nowList, leagues, upcoming, nowMs: now });
   }
 
   function draw() {
     if (collapsed) return;
     const items = buildItems();
     renderTimeline(timeline, { items, now });
-    buildDropdown(items);
+    buildColumns(items);
   }
 
   // --- Data loading ---------------------------------------------------------
@@ -323,7 +327,9 @@ export function renderHome(main) {
 
   async function load() {
     timeline.replaceChildren(skeleton('sk-timeline'));
-    const [calOk, bOk] = await Promise.all([loadCalendar(filter), loadBroadcasts()]);
+    // Country view loads all official tiers (narrowed client-side); else the tiers.
+    const tiers = country ? '' : filter;
+    const [calOk, bOk] = await Promise.all([loadCalendar(tiers), loadBroadcasts()]);
     if (collapsed) return;
     if (!calOk && !bOk) {
       timeline.replaceChildren(errorState('Could not reach Lichess.', load));
@@ -332,18 +338,7 @@ export function renderHome(main) {
     }
   }
 
-  // --- Filter ---------------------------------------------------------------
-  filterSel.addEventListener('change', () => {
-    filter = filterSel.value;
-    lsSet(LS_FILTER, filter);
-    loadCalendar(filter); // reuse the already-loaded B
-  });
-
-  // --- Dropdown + search navigation ----------------------------------------
-  tourSel.addEventListener('change', () => {
-    if (tourSel.value) location.hash = '#/t/' + tourSel.value;
-  });
-
+  // --- Search navigation ----------------------------------------------------
   let searchTimer = null;
   let searchSeq = 0;
   searchInput.addEventListener('input', () => {

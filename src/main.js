@@ -20,16 +20,13 @@ header.className = 'site-header';
 const brand = document.createElement('a');
 brand.className = 'brand';
 brand.href = '#/';
-brand.textContent = 'Chess Live';
+brand.textContent = 'Home';
 
 const nav = document.createElement('nav');
-const navTournaments = document.createElement('a');
-navTournaments.href = '#/';
-navTournaments.textContent = 'Tournaments';
 const navAbout = document.createElement('a');
 navAbout.href = '#/about';
 navAbout.textContent = 'About';
-nav.append(navTournaments, navAbout);
+nav.append(navAbout);
 
 header.append(brand, nav);
 
@@ -78,7 +75,6 @@ function parseHash() {
 }
 
 function setActiveNav(name) {
-  navTournaments.classList.toggle('active', name !== 'about');
   navAbout.classList.toggle('active', name === 'about');
 }
 

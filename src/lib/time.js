@@ -58,3 +58,24 @@ export function formatDateRange(dates) {
   if (dates[1] == null || dates[1] === dates[0]) return start;
   return `${start} – ${formatDate(dates[1])}`;
 }
+
+/** Compact local "Nov 11 – Nov 15" (no year); single day → "Nov 11". */
+export function formatShortRange(dates) {
+  if (!dates || dates[0] == null) return '';
+  const short = (ms) =>
+    new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  const start = short(dates[0]);
+  if (dates[1] == null || dates[1] === dates[0]) return start;
+  return `${start} – ${short(dates[1])}`;
+}
+
+/** Relative start: "today" / "in 1 day" / "in N days" (past → ""). */
+export function relativeDays(ms, now) {
+  if (ms == null) return '';
+  const startDay = new Date(ms); startDay.setHours(0, 0, 0, 0);
+  const today = new Date(now); today.setHours(0, 0, 0, 0);
+  const days = Math.round((startDay - today) / 86400000);
+  if (days < 0) return '';
+  if (days === 0) return 'today';
+  return days === 1 ? 'in 1 day' : `in ${days} days`;
+}

@@ -3,9 +3,10 @@
 // today line. Row-packs bars so neither a bar nor its label overlaps.
 
 const DAY = 86400000;
-const PX_PER_DAY = 8;
+const PX_PER_DAY = 14; // stretched so each month has room for its days
 const ROW_H = 30; // bar (14) + label above (16)
-const HEADER_H = 22; // month labels strip
+const HEADER_H = 40; // month name row + day ticks/numbers row
+const DAY_LABELS = new Set([5, 10, 15, 20, 25]); // which day-of-month to number
 const LABEL_GAP = 10; // px gap kept after a label when packing
 const MAX_LABEL_PX = 220;
 
@@ -53,7 +54,7 @@ export function renderTimeline(container, { items, now }) {
   inner.className = 'timeline-inner';
   inner.style.width = width + 'px';
 
-  // Month grid lines + labels.
+  // Month grid lines + labels, plus per-day ticks and day numbers.
   let m = startOfMonth(new Date(rangeStart));
   let first = true;
   while (m.getTime() < rangeEndMonth.getTime()) {
@@ -72,6 +73,25 @@ export function renderTimeline(container, { items, now }) {
         ? `${MONTHS[m.getMonth()]} ${m.getFullYear()}`
         : MONTHS[m.getMonth()];
     inner.append(label);
+
+    // Day ticks + numbers for this month (iterate by calendar day, DST-safe).
+    const year = m.getFullYear();
+    const mon = m.getMonth();
+    const daysInMonth = new Date(year, mon + 1, 0).getDate();
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dx = x(new Date(year, mon, d).getTime());
+      const tick = document.createElement('div');
+      tick.className = 'tl-daytick';
+      tick.style.left = dx + 'px';
+      inner.append(tick);
+      if (DAY_LABELS.has(d)) {
+        const num = document.createElement('div');
+        num.className = 'tl-daynum';
+        num.style.left = dx + 'px';
+        num.textContent = String(d);
+        inner.append(num);
+      }
+    }
 
     first = false;
     m = addMonths(m, 1);
@@ -142,12 +162,21 @@ export function renderTimeline(container, { items, now }) {
   inner.style.height = HEADER_H + rowCount * ROW_H + 10 + 'px';
   container.append(inner);
 
-  // Scroll: initial = today in the right third; otherwise keep the user's place.
-  if (!container.dataset.scrolled) {
-    const target = x(now) - container.clientWidth * (2 / 3);
-    container.scrollLeft = Math.max(0, target);
-    container.dataset.scrolled = '1';
-  } else {
+  // Scroll: keep today centred until the user scrolls. The timeline loads
+  // month-by-month, so each redraw re-centres (otherwise the first partial
+  // render's position drifts as earlier months arrive). Once the user scrolls
+  // with the wheel or a drag, we stop re-centring and keep their place.
+  if (!container.__scrollBound) {
+    container.__scrollBound = true;
+    const markUser = () => {
+      container.dataset.userScrolled = '1';
+    };
+    container.addEventListener('wheel', markUser, { passive: true });
+    container.addEventListener('pointerdown', markUser);
+  }
+  if (container.dataset.userScrolled) {
     container.scrollLeft = prevScroll;
+  } else {
+    container.scrollLeft = Math.max(0, x(now) - container.clientWidth / 2);
   }
 }
