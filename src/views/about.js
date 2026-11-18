@@ -26,19 +26,19 @@ export function renderAbout(main) {
   panel.className = 'panel about-page';
 
   const h1 = document.createElement('h2');
-  h1.textContent = 'About Chess Live';
+  h1.textContent = 'About Home';
   panel.append(h1);
 
   const intro = document.createElement('p');
   intro.textContent =
-    'Chess Live follows over-the-board chess tournaments broadcast on Lichess. It is a static site with no backend and no account required.';
+    'Home follows over-the-board chess tournaments broadcast on Lichess. It is a static site with no backend and no account required.';
   panel.append(intro);
 
   panel.append(
     section('Data', [
       'Tournaments, rounds and live moves come from the free ',
       extLink('Lichess broadcast API', 'https://lichess.org/api'),
-      '. Chess Live is not affiliated with ',
+      '. Home is not affiliated with ',
       extLink('Lichess', 'https://lichess.org'),
       '.',
     ]),
@@ -46,7 +46,7 @@ export function renderAbout(main) {
 
   panel.append(
     section('Broadcast delay', [
-      'Many top events publish their moves with a delay set by the organiser, to discourage cheating. Chess Live shows each move when Lichess publishes it, so the board here can lag the one at the venue.',
+      'Many top events publish their moves with a delay set by the organiser, to discourage cheating. Home shows each move when Lichess publishes it, so the board here can lag the one at the venue.',
     ]),
   );
 
