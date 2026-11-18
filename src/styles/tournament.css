@@ -151,7 +151,7 @@
 }
 .gl-eval-fill {
   position: absolute;
-  bottom: 0;
+  top: 0; /* White fills from the top, matching the White player's row */
   left: 0;
   right: 0;
   background: #e8e8e8;

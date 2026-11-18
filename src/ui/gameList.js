@@ -11,6 +11,15 @@ function resultFor(status, color) {
   return null;
 }
 
+// White's share (0..100) for the mini eval bar. A finished game uses its
+// result (so 1-0 ≠ ½-½); an ongoing game uses the live eval, or 50 if none.
+function whitePctFor(status, ev) {
+  if (status === '1-0') return 100;
+  if (status === '0-1') return 0;
+  if (status === '½-½' || status === '1/2-1/2') return 50;
+  return evalToWhitePct(ev);
+}
+
 // Right-hand cell for a player: result when finished, else clock, else empty.
 function fillRight(right, player, game, color) {
   const status = game.status;
@@ -70,12 +79,14 @@ function makeRow(game, board, { tourId, roundId, currentGameId }) {
   const [white, black] = game.players || [{}, {}];
   row.dataset.players = `${white?.name || ''} ${black?.name || ''}`.toLowerCase();
 
-  // Thin vertical mini eval bar (neutral 50% until we have evals, Phase 4).
+  // Thin vertical mini eval bar. White fills from the top (where the White
+  // player is listed). Finished games reflect the result; live ones get the
+  // eval via patchGameRow.
   const evalBar = document.createElement('div');
   evalBar.className = 'gl-eval';
   const fill = document.createElement('div');
   fill.className = 'gl-eval-fill';
-  fill.style.height = '50%';
+  fill.style.height = whitePctFor(game.status) + '%';
   evalBar.append(fill);
 
   const num = document.createElement('div');
@@ -197,7 +208,7 @@ export function patchGameRow(container, gameId, live) {
   row._live = live;
 
   const fill = row.querySelector('.gl-eval-fill');
-  if (fill) fill.style.height = evalToWhitePct(live.eval) + '%';
+  if (fill) fill.style.height = whitePctFor(live.status, live.eval) + '%';
 
   for (const color of ['white', 'black']) {
     const right = row.querySelector(`.gl-right[data-color="${color}"]`);
