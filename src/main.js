@@ -7,6 +7,7 @@ import './styles/game.css';
 import './styles/states.css';
 import { onStatus, searchBroadcasts } from './api/lichess.js';
 import { searchLoadedTours } from './lib/tourIndex.js';
+import { SITE_NAME, DEFAULT_TOUR } from './config.js';
 import { renderHome } from './views/home.js';
 import { renderTournament } from './views/tournament.js';
 import { renderGame } from './views/game.js';
@@ -40,7 +41,7 @@ back.addEventListener('click', (e) => {
 const brand = document.createElement('a');
 brand.className = 'brand';
 brand.href = '#/';
-brand.textContent = 'Home';
+brand.textContent = SITE_NAME;
 
 // Tournament search (shown in the header on the home page). Instant matches from
 // the loaded tours (tourIndex) plus Lichess's broadcast search for anything else.
@@ -96,7 +97,12 @@ app.append(header, banner, main, footer);
 function parseHash() {
   const raw = location.hash.replace(/^#/, '');
   const parts = raw.split('/').filter(Boolean); // drop empty segments
-  if (parts.length === 0) return { name: 'home' };
+  // Single-tournament build: the home path lands on the configured tournament.
+  const homeRoute = () =>
+    DEFAULT_TOUR
+      ? { name: 'tournament', tourId: DEFAULT_TOUR, isHome: true }
+      : { name: 'home' };
+  if (parts.length === 0) return homeRoute();
   if (parts[0] === 'about') return { name: 'about' };
   if (parts[0] === 't' && parts[1]) {
     return {
@@ -104,9 +110,11 @@ function parseHash() {
       tourId: parts[1],
       roundId: parts[2],
       gameId: parts[3],
+      // The default tournament with no round selected IS the landing page.
+      isHome: !!DEFAULT_TOUR && parts[1] === DEFAULT_TOUR && parts.length < 3,
     };
   }
-  return { name: 'home' };
+  return homeRoute();
 }
 
 function setActiveNav(name) {
@@ -117,7 +125,8 @@ function setActiveNav(name) {
 // brand. The href is the logical parent — used as a fallback when there's no
 // in-app history to step back through (e.g. a shared/reloaded URL).
 function setHeaderChrome(route) {
-  const sub = route.name === 'tournament' || route.name === 'game';
+  // The single-tournament landing looks like a home page (brand left, no back).
+  const sub = (route.name === 'tournament' || route.name === 'game') && !route.isHome;
   header.classList.toggle('subpage', sub);
   back.hidden = !sub;
   if (route.name === 'game') {
@@ -229,10 +238,10 @@ function wireHeaderSearch() {
 
 // A default per-route title; the tournament/game views refine it after loading.
 const ROUTE_TITLES = {
-  home: 'Home',
-  about: 'About · Home',
-  tournament: 'Tournament · Home',
-  game: 'Game · Home',
+  home: SITE_NAME,
+  about: `About · ${SITE_NAME}`,
+  tournament: `Tournament · ${SITE_NAME}`,
+  game: `Game · ${SITE_NAME}`,
 };
 
 function render() {
@@ -240,7 +249,8 @@ function render() {
   main.replaceChildren(); // clear previous view
   setActiveNav(route.name);
   setHeaderChrome(route);
-  document.title = ROUTE_TITLES[route.name] || 'Home';
+  // The single-tournament landing (and the views, once loaded) use SITE_NAME.
+  document.title = route.isHome ? SITE_NAME : ROUTE_TITLES[route.name] || SITE_NAME;
   switch (route.name) {
     case 'about':
       renderAbout(main);
