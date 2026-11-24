@@ -16,6 +16,7 @@ import { startLiveRound, liveInfo, sideToMoveOf } from '../live/liveRound.js';
 import { liveCentis } from '../lib/time.js';
 import { Engine } from '../engine/engine.js';
 import { toWhiteScore, formatEval, whiteScoreToEv } from '../lib/eval.js';
+import { SITE_NAME } from '../config.js';
 import { skeleton, errorState } from '../ui/states.js';
 
 function gameSkeleton() {
@@ -59,7 +60,7 @@ function renderViewer(wrap, { e, game, parsed, tourId, roundId, gameId }) {
 
   const players = game?.players || [{}, {}];
   if (players[0]?.name && players[1]?.name) {
-    document.title = `${players[0].name} – ${players[1].name} · Home`;
+    document.title = `${players[0].name} – ${players[1].name} · ${SITE_NAME}`;
   }
   const roundLive = !!e.round?.ongoing;
   let status = game?.status || parsed?.headers?.Result || '*';

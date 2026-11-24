@@ -8,6 +8,7 @@ import {
 import { startLiveRound, liveInfo } from '../live/liveRound.js';
 import { renderUpcomingPanel } from '../ui/upcomingPanel.js';
 import { formatDateTime, formatDateRange } from '../lib/time.js';
+import { SITE_NAME, DEFAULT_TOUR } from '../config.js';
 import { skeleton, errorState } from '../ui/states.js';
 
 function tournamentSkeleton() {
@@ -86,7 +87,11 @@ export function renderTournament(main, { tourId, roundId }) {
       wrap.replaceChildren();
       const tour = d.tour || {};
       const info = tour.info || {};
-      document.title = `${tour.name || 'Tournament'} · Home`;
+      // On the single-tournament site, the tab is just the site name.
+      document.title =
+        DEFAULT_TOUR && tourId === DEFAULT_TOUR
+          ? SITE_NAME
+          : `${tour.name || 'Tournament'} · ${SITE_NAME}`;
       const chosenId = chooseRoundId(d, roundId);
 
       // --- Header -----------------------------------------------------------
