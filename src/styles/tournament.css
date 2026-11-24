@@ -250,3 +250,55 @@
   border-radius: 2px;
   letter-spacing: 0.5px;
 }
+
+/* Upcoming-match panel — above the pairings when a round hasn't started yet */
+.upcoming-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--tl-upcoming, #3b82f6);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.up-countdown {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.up-cd-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+.up-cd-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-bright);
+  font-variant-numeric: tabular-nums;
+}
+.up-times {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.up-meta {
+  display: grid;
+  gap: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.up-row {
+  display: flex;
+  gap: 10px;
+  font-size: 13px;
+}
+.up-key {
+  flex: 0 0 96px;
+  color: var(--text);
+}
+.up-val {
+  color: var(--text-bright);
+  min-width: 0;
+}

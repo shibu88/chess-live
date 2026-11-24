@@ -40,10 +40,43 @@
   font-size: 16px;
   color: var(--text-bright);
 }
-/* Filter dropdown menu (Official / Country ▸) */
+/* Filter bar: the dropdown + the Main / Lower-tier tabs */
+.filter-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 4px;
+  flex-wrap: wrap;
+}
+.filter-qty {
+  display: inline-flex;
+  gap: 6px;
+}
+.filter-tab {
+  background: var(--page);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 999px; /* pill */
+  padding: 5px 12px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.filter-tab:hover {
+  background: var(--panel-head);
+  color: var(--text-bright);
+}
+.filter-tab.active {
+  background: var(--nav-pill, #4a315a);
+  border-color: var(--nav-pill, #4a315a);
+  color: var(--text-bright);
+  font-weight: 600;
+}
+
+/* Filter dropdown (Top / All / Country ▸ → countries → India ▸ states) */
 .filter-menu {
   position: relative;
-  margin-left: 4px;
 }
 .filter-trigger {
   display: inline-flex;
@@ -53,7 +86,7 @@
   color: var(--text-bright);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 5px 8px;
+  padding: 5px 10px;
   font: inherit;
   font-size: 13px;
   cursor: pointer;
@@ -68,7 +101,7 @@
   top: calc(100% + 4px);
   left: 0;
   z-index: 20;
-  min-width: 160px;
+  min-width: 150px;
   padding: 4px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -107,6 +140,7 @@
   justify-content: space-between;
 }
 .filter-chev {
+  margin-left: auto;
   font-size: 10px;
   color: var(--text);
 }
@@ -123,14 +157,32 @@
   border-radius: var(--radius);
   background: var(--panel);
 }
-.filter-has-sub:hover .filter-submenu,
-.filter-has-sub.sub-open .filter-submenu {
+.filter-has-sub:hover > .filter-submenu,
+.filter-has-sub.sub-open > .filter-submenu {
+  display: block;
+}
+/* India's states: a fixed-position side flyout (so the scrollable country list
+   above can't clip it, and the country list stays visible while it's closed) */
+.filter-flyout {
+  display: none;
+  position: fixed;
+  z-index: 40;
+  min-width: 180px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+.filter-flyout.show {
   display: block;
 }
 .filter-country .flag {
   flex: none;
 }
-/* On narrow screens, open the submenu inline (below the row) */
+/* On narrow screens, open submenus inline (below the row) rather than beside */
 @media (max-width: 760px) {
   .filter-submenu {
     position: static;
@@ -298,44 +350,21 @@ input[type='text'] {
   color: var(--text-bright);
 }
 
-/* Search row */
-.picker {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  margin-top: 16px;
+/* Flash a bar when it's picked from the header search */
+@keyframes tlFlash {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(232, 232, 232, 0);
+  }
+  35% {
+    box-shadow: 0 0 0 3px var(--text-bright);
+  }
 }
-.search-wrap {
-  position: relative;
-  width: 100%;
-  max-width: 420px;
+.tl-item.tl-flash .tl-bar {
+  animation: tlFlash 0.9s ease-out 2;
+  border-radius: 2px;
 }
-.search-wrap input {
-  width: 100%;
-}
-.search-results {
-  list-style: none;
-  margin: 6px 0 0;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--panel);
-  max-width: 420px;
-}
-.search-results:empty {
-  display: none;
-}
-.search-results li {
-  padding: 6px 10px;
-  cursor: pointer;
-  border-bottom: 1px solid var(--border);
-  font-size: 13px;
-}
-.search-results li:last-child {
-  border-bottom: none;
-}
-.search-results li:hover {
-  background: var(--panel-head);
+.tl-item.tl-flash .tl-label {
   color: var(--text-bright);
 }
 

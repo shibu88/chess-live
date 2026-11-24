@@ -74,6 +74,93 @@ a:hover {
   font-weight: 600;
 }
 
+/* Back arrow (tournament/game pages) */
+.site-back {
+  font-size: 22px;
+  line-height: 1;
+  color: var(--text-bright);
+  text-decoration: none;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.site-back:hover {
+  background: var(--panel-head);
+}
+
+/* On a sub-page: back (left) · Home (centre) · About (right). */
+.site-header.subpage {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 12px;
+}
+.site-header.subpage .site-back {
+  justify-self: start;
+}
+.site-header.subpage .brand {
+  justify-self: center;
+}
+.site-header.subpage nav {
+  justify-self: end;
+  margin-left: 0;
+}
+
+/* Header tournament search (home page) */
+.header-search {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 440px;
+  margin: 0 auto; /* sit between the brand and nav */
+}
+.header-search-input {
+  width: 100%;
+  background: var(--page);
+  color: var(--text-bright);
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 4px);
+  padding: 7px 12px;
+  font-size: 14px;
+}
+.header-search-input::placeholder {
+  color: var(--text);
+}
+.header-search-results {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 4px);
+  max-height: 60vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+.header-search-results:empty {
+  display: none;
+}
+.header-search-results li {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.header-search-results li:last-child {
+  border-bottom: none;
+}
+.header-search-results li:hover {
+  background: var(--panel-head);
+  color: var(--text-bright);
+}
+
 /* Status banner (e.g. "Lichess is busy") */
 .status-banner {
   padding: 8px 20px;

@@ -2,6 +2,8 @@
 // draw a day-axis Gantt of tournament bars with month labels, grid lines and a
 // today line. Row-packs bars so neither a bar nor its label overlaps.
 
+import { shortTourName, fitLabel } from '../lib/name.js';
+
 const DAY = 86400000;
 const PX_PER_DAY = 14; // stretched so each month has room for its days
 const ROW_H = 30; // bar (14) + label above (16)
@@ -17,12 +19,16 @@ const MONTHS = [
 
 // Canvas for measuring label widths at the real font.
 let measureCtx;
-function labelWidth(text) {
+function measureText(text) {
   if (!measureCtx) {
     measureCtx = document.createElement('canvas').getContext('2d');
     measureCtx.font = "700 11px system-ui, -apple-system, 'Segoe UI', sans-serif";
   }
-  return Math.min(Math.ceil(measureCtx.measureText(text).width), MAX_LABEL_PX);
+  return Math.ceil(measureCtx.measureText(text).width);
+}
+// Width used for row-packing, clamped to the max label box.
+function labelWidth(text) {
+  return Math.min(measureText(text), MAX_LABEL_PX);
 }
 
 const startOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
@@ -113,7 +119,9 @@ export function renderTimeline(container, { items, now }) {
     const left = x(it.barStart);
     const barRight = x(it.barEnd);
     const name = it.tour.name || '';
-    const occRight = Math.max(barRight, left + labelWidth(name)) + LABEL_GAP;
+    // Compact label for the graph (full name stays in the tooltip + cards).
+    const short = fitLabel(shortTourName(name), MAX_LABEL_PX, measureText);
+    const occRight = Math.max(barRight, left + labelWidth(short)) + LABEL_GAP;
 
     let row = 0;
     while (row < rowRight.length && rowRight[row] > left) row++;
@@ -124,6 +132,7 @@ export function renderTimeline(container, { items, now }) {
 
     const item = document.createElement('div');
     item.className = 'tl-item';
+    item.dataset.tourId = it.tour.id; // lets the header search scroll to this bar
     item.style.left = left + 'px';
     item.style.top = top + 'px';
     item.style.width = Math.max(barRight - left, 2) + 'px';
@@ -149,7 +158,7 @@ export function renderTimeline(container, { items, now }) {
     const label = document.createElement('div');
     label.className = 'tl-label' + (it.tier === 5 ? ' tier5' : '');
     label.style.maxWidth = MAX_LABEL_PX + 'px';
-    label.append(document.createTextNode(name));
+    label.append(document.createTextNode(short));
     item.append(label);
 
     item.addEventListener('click', () => {

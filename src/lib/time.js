@@ -69,6 +69,41 @@ export function formatShortRange(dates) {
   return `${start} – ${short(dates[1])}`;
 }
 
+/**
+ * Date + time in a specific IANA time zone, e.g. formatInZone(ms, 'Asia/Kolkata')
+ * → "25 Nov 2026, 01:00". Pass `timeZone` undefined for the visitor's local zone.
+ */
+export function formatInZone(ms, timeZone) {
+  if (ms == null) return '';
+  return new Date(ms).toLocaleString(undefined, {
+    timeZone, // undefined → the viewer's local zone
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+/**
+ * Countdown to `targetMs` as "1d 4h 23m" (seconds added under a day: "4h 23m 10s").
+ * Returns "" once the target has passed.
+ */
+export function formatCountdown(targetMs, now = Date.now()) {
+  if (targetMs == null) return '';
+  let s = Math.floor((targetMs - now) / 1000);
+  if (s <= 0) return '';
+  const d = Math.floor(s / 86400); s -= d * 86400;
+  const h = Math.floor(s / 3600); s -= h * 3600;
+  const m = Math.floor(s / 60); s -= m * 60;
+  const parts = [];
+  if (d) parts.push(`${d}d`);
+  if (d || h) parts.push(`${h}h`);
+  parts.push(`${m}m`);
+  if (!d) parts.push(`${s}s`); // seconds only when under a day
+  return parts.join(' ');
+}
+
 /** Relative start: "today" / "in 1 day" / "in N days" (past → ""). */
 export function relativeDays(ms, now) {
   if (ms == null) return '';

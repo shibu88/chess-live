@@ -1,19 +1,18 @@
 // Home view — timeline + tournament dropdown & search (SPEC §5.1, §5.2).
-import {
-  getCalendarMonth,
-  getBroadcasts,
-  searchBroadcasts,
-} from '../api/lichess.js';
+import { getCalendarMonth, getBroadcasts } from '../api/lichess.js';
 import { renderTimeline } from '../ui/timeline.js';
 import { renderColumns } from '../ui/tournamentColumns.js';
 import { renderFilterMenu } from '../ui/filterMenu.js';
-import { matchCountry } from '../lib/country.js';
+import { matchCountry, matchIndiaState } from '../lib/country.js';
+import { indexTours } from '../lib/tourIndex.js';
 import { skeleton, emptyState, errorState } from '../ui/states.js';
 
 const DAY = 86400000;
 const LS_COLLAPSED = 'chesslive.timeline.collapsed';
-const LS_FILTER = 'chesslive.timeline.filter';
-const LS_COUNTRY = 'chesslive.timeline.country';
+const LS_VIEW = 'chesslive.timeline.view'; // 'top' | 'all' (default: top)
+const LS_COUNTRY = 'chesslive.timeline.country'; // FIDE code, or ''
+const LS_STATE = 'chesslive.timeline.state'; // Indian state key (India only), or ''
+const LS_TIER = 'chesslive.timeline.tier'; // 'main' (tier 4-5) | 'lower' (tier 3)
 const LS_CAL = 'chesslive.cal.'; // + tiers key → cached calendar for instant paint
 const CAL_TTL = 24 * 60 * 60 * 1000; // show a saved calendar for up to a day
 
@@ -103,12 +102,24 @@ export function renderHome(main) {
   const now = Date.now();
 
   // State.
-  let filter = lsGet(LS_FILTER, 'best,high'); // tiers for "Official" view
+  // quantity: "Top" = the top ~10 ranked events of the selection, "All" = every
+  // event. country/stateKey narrow the selection by location (state = India only).
+  let quantity = lsGet(LS_VIEW, 'top'); // 'top' | 'all'
+  if (quantity !== 'all' && quantity !== 'top') quantity = 'top';
   let country = lsGet(LS_COUNTRY, '') || null; // FIDE code when a country is picked
+  let stateKey = lsGet(LS_STATE, '') || null; // Indian state key (India only)
+  if (stateKey && country !== 'IND') stateKey = null; // states are India-only
+  let tier = lsGet(LS_TIER, 'main'); // 'main' (tier 4-5) | 'lower' (tier 3)
+  if (tier !== 'main' && tier !== 'lower') tier = 'main';
   let collapsed = lsGet(LS_COLLAPSED, '0') === '1';
   const aMap = new Map(); // tour.id -> tour (from A)
   const bMap = new Map(); // tour.id -> bRec (from B)
   let loadToken = 0; // invalidates stale A loads when the filter changes
+  let allowedIds = null; // set per draw: top-N id set when capping, else null
+
+  // Which calendar tiers to fetch: "Main" (tier 4-5) only needs the upper tiers;
+  // "Lower tier" (tier 3) needs the full, un-tiered calendar.
+  const tiersFor = () => (tier === 'main' ? 'best,high' : '');
 
   // --- Panel skeleton -------------------------------------------------------
   const panel = document.createElement('div');
@@ -125,22 +136,20 @@ export function renderHome(main) {
   title.textContent = 'Top tournaments';
 
   const filterMenu = renderFilterMenu({
-    current: country ? { kind: 'country', fed: country } : { kind: 'official' },
+    current: { quantity, country, state: stateKey, tier },
     onSelect: (sel) => {
       // Changing the filter is a fresh start: re-centre the graph on today
       // (like first load), instead of keeping the previous scroll position.
       delete timeline.dataset.userScrolled;
-      if (sel.kind === 'country') {
-        country = sel.fed;
-        lsSet(LS_COUNTRY, country);
-        loadCalendar(''); // all official tiers; narrowed client-side by country
-      } else {
-        country = null;
-        filter = 'best,high';
-        lsSet(LS_COUNTRY, '');
-        lsSet(LS_FILTER, filter);
-        loadCalendar(filter);
-      }
+      quantity = sel.quantity === 'all' ? 'all' : 'top';
+      country = sel.country || null;
+      stateKey = country === 'IND' ? sel.state || null : null;
+      tier = sel.tier === 'lower' ? 'lower' : 'main';
+      lsSet(LS_VIEW, quantity);
+      lsSet(LS_COUNTRY, country || '');
+      lsSet(LS_STATE, stateKey || '');
+      lsSet(LS_TIER, tier);
+      loadCalendar(tiersFor());
     },
   });
 
@@ -168,24 +177,14 @@ export function renderHome(main) {
   const timeline = document.createElement('div');
   timeline.className = 'timeline';
 
-  // Search bar (above the columns).
-  const picker = document.createElement('div');
-  picker.className = 'picker';
-  const searchWrap = document.createElement('div');
-  searchWrap.className = 'search-wrap';
-  const searchInput = document.createElement('input');
-  searchInput.type = 'text';
-  searchInput.placeholder = 'Search tournaments…';
-  const searchResults = document.createElement('ul');
-  searchResults.className = 'search-results';
-  searchWrap.append(searchInput, searchResults);
-  picker.append(searchWrap);
+  // Tournament search now lives in the header bar (see main.js); the loaded
+  // tours are shared through tourIndex so it can match them instantly.
 
   // Past / Now / Upcoming card columns.
   const columns = document.createElement('div');
   columns.className = 'tl-columns-wrap';
 
-  body.append(timeline, picker, columns);
+  body.append(timeline, columns);
   panel.append(head, body);
   main.append(panel);
 
@@ -204,26 +203,61 @@ export function renderHome(main) {
   });
 
   // --- Draw (timeline + columns) -------------------------------------------
-  // Does a tour's tier pass the "Official" filter? (used when no country picked)
-  function tierAllowed(tier) {
-    if (filter === 'best') return tier === 5;
-    if (filter === 'best,high') return tier === 4 || tier === 5;
-    return true; // All official
+  // Tier gate: "Main" = elite tiers 4-5, "Lower tier" = local (tier 3 / none).
+  function tierPass(tour) {
+    const t = tour.tier || 0;
+    return tier === 'main' ? t >= 4 : t <= 3;
   }
 
-  // Active filter predicate: a country match when one is picked, else the tier.
-  // Applied to both the graph bars and the Past/Now/Upcoming columns so they
-  // always reflect the current selection.
+  // Location + tier gate: a country/state match when one is picked (else every
+  // location), AND the active tier band.
   function tourPasses(tour) {
-    if (country) return matchCountry(country, tour);
-    return tierAllowed(tour.tier);
+    if (!tierPass(tour)) return false;
+    if (country) {
+      if (stateKey) {
+        return matchCountry('IND', tour) && matchIndiaState(stateKey, tour);
+      }
+      return matchCountry(country, tour);
+    }
+    return true;
+  }
+
+  // Cap to the top ~10 when: "Main" (always ≤10 main events) or the global "Top"
+  // dropdown. "All" + "Lower tier" shows everything. Returns an id set or null.
+  function needCap() {
+    return tier === 'main' || (!country && quantity === 'top');
+  }
+
+  // The top ~10 of the current selection, ranked by Lichess tier then start
+  // date. The candidate pool mirrors what the graph actually draws — calendar
+  // (A) tours plus only the *live* broadcast (B) tours — so recent events from
+  // B that fall outside the graph window don't bump on-graph events out.
+  function computeTopIds() {
+    if (!needCap()) return null;
+    const byId = new Map();
+    for (const t of aMap.values()) if (tourPasses(t)) byId.set(t.id, t);
+    for (const [id, rec] of bMap) {
+      if (byId.has(id) || !tourPasses(rec.tour)) continue;
+      const c = classify(rec.tour, rec, now);
+      if (c.status === 'live' || c.status === 'playing') byId.set(id, rec.tour);
+    }
+    const ranked = [...byId.values()].sort(
+      (a, b) =>
+        (b.tier || 0) - (a.tier || 0) || (b.dates?.[0] || 0) - (a.dates?.[0] || 0),
+    );
+    return new Set(ranked.slice(0, 10).map((t) => t.id));
+  }
+
+  // Passes the location gate AND the "Top" cap (when active).
+  function tourVisible(tour) {
+    return tourPasses(tour) && (allowedIds == null || allowedIds.has(tour.id));
   }
 
   function buildItems() {
     const items = [];
     const seen = new Set();
     for (const tour of aMap.values()) {
-      if (!tourPasses(tour)) continue;
+      if (!tourVisible(tour)) continue;
       const c = classify(tour, bMap.get(tour.id), now);
       items.push({ tour, tier: tour.tier, ...c });
       seen.add(tour.id);
@@ -232,7 +266,7 @@ export function renderHome(main) {
     // pass the active filter — otherwise the filter has no effect.
     for (const [id, bRec] of bMap) {
       if (seen.has(id)) continue;
-      if (!tourPasses(bRec.tour)) continue;
+      if (!tourVisible(bRec.tour)) continue;
       const c = classify(bRec.tour, bRec, now);
       if (c.status === 'live' || c.status === 'playing') {
         items.push({ tour: bRec.tour, tier: bRec.tour.tier, ...c });
@@ -249,7 +283,7 @@ export function renderHome(main) {
     for (const it of items) byId.set(it.tour.id, it);
     for (const [id, bRec] of bMap) {
       if (byId.has(id)) continue;
-      if (!tourPasses(bRec.tour)) continue;
+      if (!tourVisible(bRec.tour)) continue;
       const c = classify(bRec.tour, bRec, now);
       byId.set(id, { tour: bRec.tour, tier: bRec.tour.tier, ...c });
     }
@@ -277,6 +311,7 @@ export function renderHome(main) {
 
   function draw() {
     if (collapsed) return;
+    allowedIds = computeTopIds(); // recompute the Top-N cap for this selection
     const items = buildItems();
     renderTimeline(timeline, { items, now });
     buildColumns(items);
@@ -328,8 +363,10 @@ export function renderHome(main) {
   async function loadCalendar(tiers) {
     const token = ++loadToken;
     // Instant paint from the last saved copy for this filter, then refresh.
-    if (primeFromCache(tiers)) draw();
-    else aMap.clear();
+    if (primeFromCache(tiers)) {
+      indexTours(aMap.values()); // instant header-search matches on repeat opens
+      draw();
+    } else aMap.clear();
 
     const fresh = new Map();
     let anyOk = false;
@@ -358,6 +395,7 @@ export function renderHome(main) {
       draw();
     }
     if (anyOk) saveToCache(tiers);
+    indexTours(aMap.values()); // let the header search match these
     return anyOk;
   }
 
@@ -368,6 +406,7 @@ export function renderHome(main) {
         if (rec.tour?.id) bMap.set(rec.tour.id, rec);
       }
       draw();
+      indexTours([...bMap.values()].map((r) => r.tour)); // feed the header search
       return true;
     } catch (err) {
       console.error('[timeline] broadcasts (B) failed:', err);
@@ -378,8 +417,7 @@ export function renderHome(main) {
   async function load() {
     timeline.replaceChildren(skeleton('sk-timeline'));
     // Country view loads all official tiers (narrowed client-side); else the tiers.
-    const tiers = country ? '' : filter;
-    const [calOk, bOk] = await Promise.all([loadCalendar(tiers), loadBroadcasts()]);
+    const [calOk, bOk] = await Promise.all([loadCalendar(tiersFor()), loadBroadcasts()]);
     if (collapsed) return;
     if (!calOk && !bOk) {
       timeline.replaceChildren(errorState('Could not reach Lichess.', load));
@@ -387,37 +425,6 @@ export function renderHome(main) {
       timeline.replaceChildren(emptyState('No tournaments to show.'));
     }
   }
-
-  // --- Search navigation ----------------------------------------------------
-  let searchTimer = null;
-  let searchSeq = 0;
-  searchInput.addEventListener('input', () => {
-    const q = searchInput.value.trim();
-    clearTimeout(searchTimer);
-    if (q.length < 3) {
-      searchResults.replaceChildren();
-      return;
-    }
-    searchTimer = setTimeout(async () => {
-      const seq = ++searchSeq;
-      try {
-        const res = await searchBroadcasts(q);
-        if (seq !== searchSeq) return; // a newer search superseded this one
-        searchResults.replaceChildren();
-        for (const r of res.currentPageResults || []) {
-          const li = document.createElement('li');
-          const loc = r.tour.info?.location;
-          li.textContent = loc ? `${r.tour.name} · ${loc}` : r.tour.name;
-          li.addEventListener('click', () => {
-            location.hash = '#/t/' + r.tour.id;
-          });
-          searchResults.append(li);
-        }
-      } catch (err) {
-        console.error('[search] failed:', err);
-      }
-    }, 400);
-  });
 
   // --- Go -------------------------------------------------------------------
   load();
