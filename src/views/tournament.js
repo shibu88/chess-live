@@ -6,6 +6,7 @@ import {
   startClockTicker,
 } from '../ui/gameList.js';
 import { startLiveRound, liveInfo } from '../live/liveRound.js';
+import { renderUpcomingPanel } from '../ui/upcomingPanel.js';
 import { formatDateTime, formatDateRange } from '../lib/time.js';
 import { skeleton, errorState } from '../ui/states.js';
 
@@ -152,10 +153,10 @@ export function renderTournament(main, { tourId, roundId }) {
         return;
       }
 
-      loadRound(listWrap, chosenId);
+      loadRound(listWrap, chosenId, tour);
   }
 
-  function loadRound(listWrap, chosenId) {
+  function loadRound(listWrap, chosenId, tour) {
     listWrap.replaceChildren(skeleton('sk-row'), skeleton('sk-row'), skeleton('sk-row'));
     getRound(chosenId)
       .then((e) => {
@@ -166,6 +167,14 @@ export function renderTournament(main, { tourId, roundId }) {
           roundId: chosenId,
           backHref: '#/',
         });
+
+        // Upcoming round: a countdown + start times + venue + watch links,
+        // shown above the pairings. Stop its ticker when leaving the round.
+        const upcoming = renderUpcomingPanel({ round: e.round, tour });
+        if (upcoming) {
+          listWrap.prepend(upcoming.el);
+          window.addEventListener('hashchange', upcoming.stop, { once: true });
+        }
         // Live updates while the round is ongoing (SPEC §5.4).
         if (e.round?.ongoing) {
           const thinkById = new Map(
@@ -193,7 +202,7 @@ export function renderTournament(main, { tourId, roundId }) {
       .catch((err) => {
         console.error('[tournament] round (E) failed:', err);
         listWrap.replaceChildren(
-          errorState('Could not load this round.', () => loadRound(listWrap, chosenId)),
+          errorState('Could not load this round.', () => loadRound(listWrap, chosenId, tour)),
         );
       });
   }
