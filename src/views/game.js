@@ -70,9 +70,10 @@ function renderViewer(wrap, { e, game, parsed, tourId, roundId, gameId }) {
   const state = { ply: n, orientation: 'white' };
 
   // Analysis state.
+  const MULTIPV = 3; // top lines shown while analysing
   let engine = null;
   let analyzeOn = false;
-  let currentEval = null; // { white, depth, pvUci, fen }
+  let lines = []; // index 0..MULTIPV-1 -> { white, depth, pvUci, fen }
   let lastShownFen = null;
   let analyseTimer = null;
   const engineEvals = []; // ply -> White-POV ev (overrides PGN eval in the list)
@@ -119,13 +120,13 @@ function renderViewer(wrap, { e, game, parsed, tourId, roundId, gameId }) {
   evalText.className = 'eval-text';
   const infoLine = document.createElement('div');
   infoLine.className = 'engine-info';
-  const bestLine = document.createElement('div');
-  bestLine.className = 'best-line';
+  const linesEl = document.createElement('div');
+  linesEl.className = 'engine-lines';
   const analyzeAllBtn = document.createElement('button');
   analyzeAllBtn.type = 'button';
   analyzeAllBtn.className = 'analyze-all-btn';
   analyzeAllBtn.textContent = 'Analyze all moves';
-  engineBox.append(analyzeBtn, evalText, infoLine, bestLine, analyzeAllBtn);
+  engineBox.append(analyzeBtn, evalText, infoLine, linesEl, analyzeAllBtn);
 
   const liveBtn = document.createElement('button');
   liveBtn.type = 'button';
@@ -210,21 +211,38 @@ function renderViewer(wrap, { e, game, parsed, tourId, roundId, gameId }) {
   }
 
   // --- Analysis UI ----------------------------------------------------------
+  // The eval bar and big eval text follow line 1 (the best line).
+  function bestLine() {
+    return lines[0] || null;
+  }
+
   function updateEngineUI() {
-    evalText.textContent = analyzeOn ? formatEval(currentEval?.white) : '';
+    const best = bestLine();
+    evalText.textContent = analyzeOn ? formatEval(best?.white) : '';
     infoLine.textContent = analyzeOn
-      ? `Stockfish 19 lite · depth ${currentEval?.depth ?? 0}`
+      ? `Stockfish 19 lite · depth ${best?.depth ?? 0}`
       : '';
-    bestLine.textContent =
-      analyzeOn && currentEval?.pvUci
-        ? pvToSan(currentEval.fen, currentEval.pvUci, 8)
-        : '';
+    linesEl.replaceChildren();
+    if (!analyzeOn) return;
+    for (const line of lines) {
+      if (!line?.pvUci) continue;
+      const row = document.createElement('div');
+      row.className = 'engine-line';
+      const score = document.createElement('span');
+      score.className = 'engine-line-eval';
+      score.textContent = formatEval(line.white);
+      const moves = document.createElement('span');
+      moves.className = 'engine-line-moves';
+      moves.textContent = pvToSan(line.fen, line.pvUci, 8); // engine SAN, safe
+      row.append(score, moves);
+      linesEl.append(row);
+    }
   }
 
   function updateEvalBar() {
     if (analyzeOn && parsed) {
       evalBarWrap.hidden = false;
-      renderEvalBar(evalBarWrap, currentEval?.white ?? null, state.orientation);
+      renderEvalBar(evalBarWrap, bestLine()?.white ?? null, state.orientation);
     } else {
       evalBarWrap.hidden = true;
       evalBarWrap.replaceChildren();
@@ -234,7 +252,9 @@ function renderViewer(wrap, { e, game, parsed, tourId, roundId, gameId }) {
   function onEngineInfo(info) {
     if (!analyzeOn || allRunning || !parsed) return;
     if (info.fen !== parsed.fens[state.ply]) return; // stale
-    currentEval = {
+    const idx = (info.multipv || 1) - 1;
+    if (idx < 0 || idx >= MULTIPV) return;
+    lines[idx] = {
       white: toWhiteScore(info.score, sideToMoveOf(info.fen)),
       depth: info.depth,
       pvUci: info.pvUci,
@@ -257,7 +277,7 @@ function renderViewer(wrap, { e, game, parsed, tourId, roundId, gameId }) {
     clearTimeout(analyseTimer);
     analyseTimer = setTimeout(() => {
       if (!analyzeOn || allRunning || !parsed || !engine) return;
-      engine.analyse(parsed.fens[state.ply], { depth: 22 }).catch(() => {});
+      engine.analyse(parsed.fens[state.ply], { depth: 22, multipv: MULTIPV }).catch(() => {});
     }, 150);
   }
 
@@ -266,7 +286,7 @@ function renderViewer(wrap, { e, game, parsed, tourId, roundId, gameId }) {
     analyzeBtn.classList.toggle('on', analyzeOn);
     analyzeBtn.textContent = analyzeOn ? 'Analyze: on' : 'Analyze';
     if (analyzeOn) {
-      currentEval = null;
+      lines = [];
       lastShownFen = parsed ? parsed.fens[state.ply] : null;
       updateEngineUI();
       updateEvalBar();
@@ -284,7 +304,7 @@ function renderViewer(wrap, { e, game, parsed, tourId, roundId, gameId }) {
     } else {
       clearTimeout(analyseTimer);
       if (engine) engine.stop();
-      currentEval = null;
+      lines = [];
       updateEngineUI();
       updateEvalBar();
     }
@@ -306,7 +326,7 @@ function renderViewer(wrap, { e, game, parsed, tourId, roundId, gameId }) {
       for (let p = 1; p <= n; p++) {
         if (allCancel) break;
         const fen = parsed.fens[p];
-        const info = await engine.analyse(fen, { depth: 12 });
+        const info = await engine.analyse(fen, { depth: 12, multipv: 1 });
         if (info?.score) {
           engineEvals[p] = whiteScoreToEv(toWhiteScore(info.score, sideToMoveOf(fen)));
           renderMoves();
@@ -344,7 +364,7 @@ function renderViewer(wrap, { e, game, parsed, tourId, roundId, gameId }) {
       const fen = parsed.fens[state.ply];
       if (fen !== lastShownFen) {
         lastShownFen = fen;
-        currentEval = null; // position changed — await fresh eval
+        lines = []; // position changed — await fresh evals
         scheduleAnalyse();
       }
       updateEngineUI();

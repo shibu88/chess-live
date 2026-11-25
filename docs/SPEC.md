@@ -135,7 +135,7 @@ Desktop: three columns, like Lichess's broadcast page.
   - Player bar: flag · title (gold) · name · rating (grey) … right side: finished → result box ("1" green / "0" red / "½" grey); unfinished → clock.
   - Thin vertical eval bar along the board's left edge, shown only while Analyze is on.
 - **Right (~360px):**
-  - Engine box: **Analyze** toggle button, big eval text (`+0.84`), small line "Stockfish 19 lite · depth 22", best line (first 8 moves in SAN, starting with the move number).
+  - Engine box: **Analyze** toggle button, big eval text (`+0.84`), small line "Stockfish 19 lite · depth 22", then the top 3 lines (MultiPV) — each `<eval> <SAN line>`, first 8 plies in SAN starting with the move number (§5.5).
   - Move list: two columns with move numbers (`1. e4  c5`), current move highlighted, click a move to jump to it. When a move has an eval (from `[%eval]` or "Analyze all moves"), show it in small grey text beside the move with one decimal (`+0.2`).
   - Under the list: ⏮ ◀ ▶ ⏭ and flip ⇅. Keyboard: ← → Home End, `f` = flip.
 - **Following live:** if the viewer is on the latest move and a new move arrives, go to it. If they're looking at an earlier move, stay there and show a red "● Live" button that jumps to the latest move.
@@ -149,7 +149,8 @@ Desktop: three columns, like Lichess's broadcast page.
 ### 5.5 Analyze — Stockfish in the browser
 - Engine: `stockfish` npm package, version 19. A small `scripts/copy-engine.js`, run from `postinstall`, copies `node_modules/stockfish/bin/stockfish-19-lite-single.js` and `stockfish-19-lite-single.wasm`, plus `node_modules/stockfish/Copying.txt` (the GPL licence), into `public/engine/` (git-ignored; Netlify's install recreates it). The single-threaded lite build (~1.7 MB) needs no special server headers. Don't use the multi-threaded builds (they need cross-origin isolation headers).
 - `src/engine/engine.js` wraps `new Worker('/engine/stockfish-19-lite-single.js')`: `init()`, `analyse(fen)`, `stop()`, `onInfo(cb)`. UCI order: `uci` → wait for `uciok` → `isready` → wait for `readyok` → `ucinewgame` → `position fen <FEN>` → `go depth 22`.
-- Parse `info … depth D … score cp X` or `score mate M` … `pv m1 m2 …`. Scores are from the side to move: when Black is to move, flip the sign so the display is always from White's side. Convert the `pv` (UCI) to SAN with chess.js for the best line.
+- Parse `info … depth D … multipv K … score cp X` or `score mate M` … `pv m1 m2 …`. Scores are from the side to move: when Black is to move, flip the sign so the display is always from White's side. Convert each `pv` (UCI) to SAN with chess.js.
+- **Top 3 lines (MultiPV):** send `setoption name MultiPV value 3` so the engine returns its three best candidate moves (`multipv 1..3`). Show them as three rows, each `<eval> <SAN line>` (e.g. `+0.12 32... Kh7 33. Rh5 Kg8`), best first. The big eval text and the eval bar follow line 1. "Analyze all moves" runs with MultiPV 1 (best line only) for speed.
 - Display: centipawns → `+0.84` / `-0.84` (two decimals, always a sign, `0.00` for zero). Mate → `#3` (White mates) / `#-3` (Black mates).
 - Eval bar, White's share in % = `50 + 50 * (2 / (1 + Math.exp(-0.00368208 * cp)) - 1)` with cp clamped to ±1000; mate = 100% or 0%. (Same curve Lichess uses.)
 - When the shown position changes while Analyze is on: send `stop`, wait for `bestmove`, then analyse the new position (debounce 150 ms). Turning Analyze off stops the engine and hides the eval bar.
