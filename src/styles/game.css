@@ -265,12 +265,28 @@
   font-size: 11px;
   color: var(--result-draw);
 }
-.best-line {
+.engine-lines {
   margin-top: 6px;
+  min-height: 18px;
+}
+.engine-line {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
   font-size: 13px;
   color: var(--text);
-  min-height: 18px;
+  line-height: 1.5;
   word-break: break-word;
+}
+.engine-line-eval {
+  flex: 0 0 auto;
+  min-width: 46px;
+  font-weight: 600;
+  color: var(--text-bright);
+  font-variant-numeric: tabular-nums;
+}
+.engine-line-moves {
+  flex: 1 1 auto;
 }
 .analyze-all-btn {
   margin-top: 8px;

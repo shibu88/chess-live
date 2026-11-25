@@ -9,16 +9,20 @@ function parseScore(line) {
   return m ? { type: m[1], value: Number(m[2]) } : null;
 }
 
-// `info … depth D … score cp|mate V … pv m1 m2 …` → { depth, score, pvUci }.
-// Ignores info lines without a score+pv (score is from the side to move).
+// `info … depth D … multipv K … score cp|mate V … pv m1 m2 …`
+// → { depth, multipv, score, pvUci }. `multipv` is 1 when the field is absent
+// (single-line search). Ignores info lines without a score+pv (score is from
+// the side to move).
 function parseInfoLine(line) {
   if (!line.startsWith('info ')) return null;
   const score = parseScore(line);
   const pvM = line.match(/\bpv (.+)$/);
   if (!score || !pvM) return null;
   const depthM = line.match(/\bdepth (\d+)/);
+  const mpvM = line.match(/\bmultipv (\d+)/);
   return {
     depth: depthM ? Number(depthM[1]) : 0,
+    multipv: mpvM ? Number(mpvM[1]) : 1,
     score,
     pvUci: pvM[1].trim().split(/\s+/),
   };
@@ -33,8 +37,9 @@ export class Engine {
     this._rawListeners = new Set(); // for the handshake _await
     this._infoCbs = new Set();
     this._bestmoveWaiters = [];
-    this._lastInfo = null;
+    this._lines = new Map(); // multipv index -> latest info, for this search
     this._searchResolve = null;
+    this.multipv = 1; // last value sent via `setoption name MultiPV`
   }
 
   _emit(line) {
@@ -77,14 +82,21 @@ export class Engine {
     if (line.startsWith('info ')) {
       const info = parseInfoLine(line);
       if (info) {
-        this._lastInfo = info;
+        this._lines.set(info.multipv, info);
         for (const cb of [...this._infoCbs]) {
-          cb({ depth: info.depth, score: info.score, pvUci: info.pvUci, fen: this.currentFen });
+          cb({
+            depth: info.depth,
+            multipv: info.multipv,
+            score: info.score,
+            pvUci: info.pvUci,
+            fen: this.currentFen,
+          });
         }
       }
     } else if (line.startsWith('bestmove')) {
       this.searching = false;
-      const info = this._lastInfo;
+      // Resolve with the best line (multipv 1), not whatever came last.
+      const info = this._lines.get(1) || null;
       const resolve = this._searchResolve;
       this._searchResolve = null;
       const waiters = this._bestmoveWaiters;
@@ -119,14 +131,18 @@ export class Engine {
    * onInfo; the returned promise resolves with the final { depth, score, pvUci }
    * on `bestmove`.
    */
-  async analyse(fen, { depth = 22 } = {}) {
+  async analyse(fen, { depth = 22, multipv = 1 } = {}) {
     if (this.searching) {
       this.send('stop');
       await this._awaitBestmove();
     }
+    if (multipv !== this.multipv) {
+      this.send(`setoption name MultiPV value ${multipv}`);
+      this.multipv = multipv;
+    }
     this.currentFen = fen;
     this.searching = true;
-    this._lastInfo = null;
+    this._lines.clear();
     const done = new Promise((res) => {
       this._searchResolve = res;
     });
@@ -163,5 +179,7 @@ export class Engine {
     this._rawListeners.clear();
     this._infoCbs.clear();
     this._bestmoveWaiters = [];
+    this._lines.clear();
+    this.multipv = 1;
   }
 }
