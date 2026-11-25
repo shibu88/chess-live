@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:wcc": "vite build --mode wcc --outDir dist-wcc",
     "preview": "vite preview",
+    "deploy": "npm run build && netlify deploy --prod --dir=dist --site=cff53362-af8e-485b-ba09-f3238d186b26",
+    "deploy:wcc": "npm run build:wcc && netlify deploy --prod --dir=dist-wcc --site=9afeeb60-547a-496c-aa7d-c9b4b1372d16",
     "copy-engine": "node scripts/copy-engine.js",
     "postinstall": "node scripts/copy-engine.js"
   },
